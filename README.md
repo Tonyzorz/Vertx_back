@@ -27,9 +27,8 @@ Once packaged, just launch the _fat jar_ as follows:
 ```
 java -jar target/my-first-app-db-1.0-SNAPSHOT-fat.jar -conf src/main/conf/my-application-conf.json
 
-run io.vertx.blog.first.MyStarterVerticle -conf src/main/conf/my-application-conf.json
-
-run io.vertx.blog.first.MyStarterVerticle -conf src/main/conf/my-application-conf.json -cluster -cluster-host 192.168.11.6 -ha -cluster-port 15701
+run io.vertx.blog.first.PreStarterVerticle -conf src/main/conf/my-application-conf.json
+run io.vertx.blog.first.PreStarterVerticle -conf src/main/conf/my-application-conf.json -cluster -cluster-host 192.168.11.6 -ha -cluster-port 15701
 ```
 
 java -jar target/my-first-app-db-1.0-SNAPSHOT-6-15-taewon.jar -conf src/main/conf/my-application-conf.json -cluster-host 192.168.11.6 -ha
@@ -41,3 +40,5 @@ java -jar target/my-first-app-db-1.0-SNAPSHOT-6-15-taewon.jar -conf src/main/con
 
 
 Then, open a browser to http://localhost:8080.
+
+
