@@ -1,0 +1,13 @@
+{
+  "http.port" : 8090,
+  "webLogic.port" : 18090,
+  "url": "jdbc:mariadb://192.168.11.6:3307/test",
+  "driver_class": "org.mariadb.jdbc.Driver",
+  "user": "root",
+  "password": "root",
+  "maxPoolSize" : 20,
+  "username": "root",
+  "authSource" : "admin",
+  "role" : "user",
+  "package_nm" : "io.vertx.blog.first."
+}
