@@ -3,8 +3,8 @@ package io.vertx.blog.first;
 import java.util.HashSet;
 import java.util.Set;
 
-import org.apache.commons.configuration.PropertiesConfiguration;
 import org.apache.log4j.Logger;
+import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
 import org.json.simple.parser.ParseException;
@@ -31,12 +31,10 @@ public class QueryWebVerticle extends AbstractVerticle {
 
 	private static Logger logger = Logger.getLogger(QueryWebVerticle.class);
 	private SharedData sharedData;
-	private PropertiesConfiguration configuration = null;
-	// private static final String SERVER_FILE = "file:/data/router.properties";
-	// private static final String CLASSPATH_FILE = "router.properties";
 	private WebClient webClient;
 
-	@SuppressWarnings("deprecation")
+	private int port;
+	private String httpIP;
 	@Override
 	public void start(Future<Void> fut) throws Exception {
 
@@ -45,6 +43,8 @@ public class QueryWebVerticle extends AbstractVerticle {
 
 		sharedData = vertx.sharedData();
 
+		port = config().getInteger("http.port");
+		httpIP = config().getString("http.ip");
 		// routing 해주기
 		startWebApp((http) -> completeStartup(http, fut));
 
@@ -90,8 +90,9 @@ public class QueryWebVerticle extends AbstractVerticle {
 		
 		//instance
 		router.get("/instancefind").handler(this::find_getAllInstance);
-		router.get("/instancefind/:id").handler(this::find_getOneInstance);
-		router.delete("/instanceDelete/*").handler(this::delete_deleteOneInstance);
+		router.get("/instancefind/:id/:role/:role_instance_id").handler(this::find_getOneInstance);
+		router.get("/instancefind/:id").handler(this::find_getIDInstance);
+ 		router.delete("/instanceDelete/*").handler(this::delete_deleteOneInstance);
 		router.post("/instanceInsert").handler(this::query_addOneInstance);
 		router.post("/instanceUpdate").handler(this::update_updateOneInstance);
 
@@ -117,13 +118,19 @@ public class QueryWebVerticle extends AbstractVerticle {
 	 */
 	private Future<Void> prepareQuery(JSONObject jsonObject) {
 
+		logger.info("entered prepareQuery");
+
 		Promise<Void> promise = Promise.promise();
 		WebClient client = WebClient.create(vertx);
 
+		logger.info("requesting to get " + httpIP + ":" + port + "/queryManage");
+
 		// get all query
-		client.get(8090, "192.168.11.6", "/queryManage").send(ar -> {
+		client.get(port, httpIP, "/queryManage").send(ar -> {
 
 			if (ar.succeeded()) {
+
+				logger.info("response from get " + httpIP + ":" + port + "/queryManage === success" );
 
 				JsonArray temp = ar.result().bodyAsJsonArray();
 				int length = temp.size();
@@ -138,6 +145,8 @@ public class QueryWebVerticle extends AbstractVerticle {
 				promise.complete();
 
 			} else {
+
+				logger.info("response from get " + httpIP + ":" + port + "/queryManage === fail" );
 
 				promise.fail(new JsonObject().put("error", ar.cause().getMessage()).encode());
 			}
@@ -155,13 +164,19 @@ public class QueryWebVerticle extends AbstractVerticle {
 	 */
 	private Future<Void> prepareMagnetic(JSONObject jsonObject) {
 
+		logger.info("entered prepareMagnetic");
+
 		Promise<Void> promise = Promise.promise();
 		WebClient client = WebClient.create(vertx);
+
+		logger.info("requesting to get " + "spaceweather.rra.go.kr" + ":" + 443 + "/api/kindex");
 
 		client.get(443, "spaceweather.rra.go.kr", "/api/kindex").ssl(true).send(ar -> {
 
 			// System.err.println("(2)" +jsonObject);
 			if (ar.succeeded()) {
+				
+				logger.info("response from get " + "spaceweather.rra.go.kr" + ":" + 443 + "/api/kindex === success" );
 
 				JSONParser parser = new JSONParser();
 				JSONObject temp1 = null;
@@ -191,6 +206,8 @@ public class QueryWebVerticle extends AbstractVerticle {
 
 			} else {
 
+				logger.info("response from get " + "spaceweather.rra.go.kr" + ":" + 443 + "/api/kindex === fail" );
+
 				promise.fail(new JsonObject().put("error", ar.cause().getMessage()).encode());
 			}
 
@@ -207,14 +224,20 @@ public class QueryWebVerticle extends AbstractVerticle {
 	 */
 	private Future<Void> prepareWeather(JSONObject jsonObject) {
 
+		logger.info("entered prepareWeather");
+
 		Promise<Void> promise = Promise.promise();
 		WebClient client = WebClient.create(vertx);
+		
+		logger.info("requesting to get " + "bn.weatheri.co.kr" + ":" + 80 + "/lguplus_d/now.php?lat=37.5175232&lon=126.8784512&name=lguplus_d");
 
 		// weather data
 		client.get(80, "bn.weatheri.co.kr", "/lguplus_d/now.php?lat=37.5175232&lon=126.8784512&name=lguplus_d")
 				.send(ar -> {
 
 					if (ar.succeeded()) {
+						
+						logger.info("response from get " + "bn.weatheri.co.kr" + ":" + 80 + "/lguplus_d/now.php?lat=37.5175232&lon=126.8784512&name=lguplus_d === success" );
 
 						JSONParser parser = new JSONParser();
 						JSONObject temp1 = null;
@@ -248,6 +271,8 @@ public class QueryWebVerticle extends AbstractVerticle {
 						promise.complete();
 
 					} else {
+						
+						logger.info("response from get " + "bn.weatheri.co.kr" + ":" + 80 + "/lguplus_d/now.php?lat=37.5175232&lon=126.8784512&name=lguplus_d === fail" );
 
 						promise.fail(new JsonObject().put("error", ar.cause().getMessage()).encode());
 
@@ -264,20 +289,26 @@ public class QueryWebVerticle extends AbstractVerticle {
 	 * 
 	 * @param routingContext
 	 */
-	@SuppressWarnings("deprecation")
 	private void get_headerData(RoutingContext routingContext) {
+
+		logger.info("entered get_headerData");
 
 		JSONObject jsonObject = new JSONObject();
 
+		logger.info("requesting to prepareQuery(jsonObject), prepareMagnetic(jsonObject), prepareWeather(jsonObject)");
 		// 성공 순서는 무관하지만 모든 실행 메소드들의 성공 여부가 중요시
 		CompositeFuture.all(prepareQuery(jsonObject), prepareMagnetic(jsonObject), prepareWeather(jsonObject))
 				.onComplete(ar -> {
 					if (ar.succeeded()) {
 
+						logger.info("response from prepareQuery(jsonObject), prepareMagnetic(jsonObject), prepareWeather(jsonObject) === success" );
+
 						routingContext.response().putHeader("Content-Type", "application/json;charset=UTF-8");
 						routingContext.response().end(jsonObject.toString());
 
 					} else {
+
+						logger.info("response from prepareQuery(jsonObject), prepareMagnetic(jsonObject), prepareWeather(jsonObject) === fail" );
 
 						routingContext.response().putHeader("Content-Type", "application/json;charset=UTF-8");
 						routingContext.response().end(ar.cause().getMessage());
@@ -315,28 +346,31 @@ public class QueryWebVerticle extends AbstractVerticle {
 	 */
 	private void update_updateOneQueryManage(RoutingContext routingContext) {
 
-		System.out.println("??????????????!!!!!!!!!!!!!!!!!!!!!!!!!");
-		WebClient client = WebClient.create(vertx);
-
-		String str = routingContext.getBodyAsString();
-		JSONParser parser = new JSONParser();
-		JSONObject jsonObject = new JSONObject();
+		logger.info("entered update_updateOneQueryManage");
 
 		try {
+			WebClient client = WebClient.create(vertx);
+			
+			String str = routingContext.getBodyAsString();
+			JSONParser parser = new JSONParser();
+			JSONObject jsonObject = new JSONObject();
 
 			jsonObject = (JSONObject) parser.parse(str);
 
 			String id = jsonObject.get("id").toString();
 
-			client.put(8090, "192.168.11.6", "/queryManage/" + id).sendJson(jsonObject, ar -> {
+			logger.info("response from put " + httpIP + ":" + port + "/queryManage/:id === success" );
+
+			client.put(port, httpIP, "/queryManage/" + id).sendJson(jsonObject, ar -> {
 
 				if (ar.succeeded()) {
-
-					System.out.println("success");
+					
+					logger.info("response from put " + httpIP + ":" + port + "/queryManage/:id === success" );
 
 				} else {
+					
+					logger.info("response from put " + httpIP + ":" + port + "/queryManage/:id === fail" );
 
-					System.out.println("fail");
 					routingContext.response().putHeader("Content-Type", "application/json;charset=UTF-8");
 					routingContext.response().end(new JsonObject().put("error", ar.cause().getMessage()).encode());
 
@@ -346,6 +380,7 @@ public class QueryWebVerticle extends AbstractVerticle {
 
 		} catch (ParseException e) {
 			// TODO Auto-generated catch block
+			logger.info(e);
 			e.printStackTrace();
 
 			routingContext.response().putHeader("Content-Type", "application/json;charset=UTF-8");
@@ -360,16 +395,21 @@ public class QueryWebVerticle extends AbstractVerticle {
 	 * 
 	 * @param routingContext
 	 */
-	@SuppressWarnings("deprecation")
 	private void find_getOneQueryManage(RoutingContext routingContext) {
+
+		logger.info("entered find_getOneQueryManage");
 
 		WebClient client = WebClient.create(vertx);
 
 		String id = routingContext.request().getParam("id");
+		
+		logger.info("requesting to get " + httpIP + ":" + port + "/queryManage/:id");
 
-		client.get(8090, "192.168.11.6", "/queryManage/" + id).send(ar -> {
+		client.get(port, httpIP, "/queryManage/" + id).send(ar -> {
 
 			if (ar.succeeded()) {
+				
+				logger.info("response from get " + httpIP + ":" + port + "/queryManage/:id === success" );
 
 				JsonArray jsonArray = ar.result().bodyAsJsonArray();
 
@@ -377,6 +417,8 @@ public class QueryWebVerticle extends AbstractVerticle {
 				routingContext.response().end(jsonArray.toString());
 
 			} else {
+				
+				logger.info("response from get " + httpIP + ":" + port + "/queryManage/:id === fail" );
 
 				routingContext.response().putHeader("Content-Type", "application/json;charset=UTF-8");
 				routingContext.response().end(new JsonObject().put("error", ar.cause().getMessage()).encode());
@@ -389,8 +431,9 @@ public class QueryWebVerticle extends AbstractVerticle {
 	 * 
 	 * @param routingContext
 	 */
-	@SuppressWarnings("deprecation")
 	private void query_addOneQueryManage(RoutingContext routingContext) {
+
+		logger.info("entered query_addOneQueryManage");
 
 		WebClient client = WebClient.create(vertx);
 
@@ -398,20 +441,23 @@ public class QueryWebVerticle extends AbstractVerticle {
 		String id = (String) json.getValue("id");
 		String queryString = (String) json.getValue("queryString");
 		
+		logger.info("requesting to post " + httpIP + ":" + port + "/queryManage");
 
-		client.post(8090, "192.168.11.6", "/queryManage")
+		client.post(port, httpIP, "/queryManage")
 				.sendJsonObject(json, ar -> {
 					if (ar.succeeded()) {
+						
+						logger.info("response from post " + httpIP + ":" + port + "/queryManage === success" );
 
 						JSONParser parser = new JSONParser();
 						JSONObject jsonObject = new JSONObject();
-
+						JSONArray array = new JSONArray();
 						try {
-
-							jsonObject = (JSONObject) parser.parse(ar.result().bodyAsString());
+							array = (JSONArray) parser.parse(ar.result().bodyAsString());
+							//jsonObject = (JSONObject) parser.parse(ar.result().bodyAsString());
 
 							routingContext.response().putHeader("Content-Type", "application/json;charset=UTF-8");
-							routingContext.response().end(jsonObject.toString());
+							routingContext.response().end(array.toString());
 
 						} catch (ParseException e) {
 							// TODO Auto-generated catch block
@@ -423,6 +469,8 @@ public class QueryWebVerticle extends AbstractVerticle {
 						}
 
 					} else {
+						
+						logger.info("response from post " + httpIP + ":" + port + "/queryManage === fail" );
 
 						routingContext.response().putHeader("Content-Type", "application/json;charset=UTF-8");
 						routingContext.response().end(new JsonObject().put("error", ar.cause().getMessage()).encode());
@@ -436,22 +484,30 @@ public class QueryWebVerticle extends AbstractVerticle {
 	 * 
 	 * @param routingContext
 	 */
-	@SuppressWarnings("deprecation")
 	private void delete_deleteOneQueryManage(RoutingContext routingContext) {
+
+		logger.info("entered delete_deleteOneQueryManage");
 
 		WebClient client = WebClient.create(vertx);
 
-		JsonObject json = new JsonObject();
 		String id = routingContext.request().getParam("id");
+		
+		JsonObject json = new JsonObject(routingContext.getBodyAsString());
+		
+		logger.info("requesting to delete " + httpIP + ":" + port + "/queryManage/:id");
 
-		client.delete(8090, "192.168.11.6", "/queryManage/" + id).send(ar -> {
+		client.delete(port, httpIP, "/queryManage/" + id).sendJsonObject(json, ar -> {
 
 			if (ar.succeeded()) {
+				
+				logger.info("response from delete " + httpIP + ":" + port + "/queryManage/:id === success" );
 
 				System.out.println("success");
 				routingContext.response().end(ar.result().toString());
 
 			} else {
+				
+				logger.info("response from delete " + httpIP + ":" + port + "/queryManage === fail/:id" );
 
 				routingContext.response().putHeader("Content-Type", "application/json;charset=UTF-8");
 				routingContext.response().end(new JsonObject().put("error", ar.cause().getMessage()).encode());
@@ -465,15 +521,19 @@ public class QueryWebVerticle extends AbstractVerticle {
 	 * 
 	 * @param routingContext
 	 */
-	@SuppressWarnings("deprecation")
 	private void find_getAllQueryManage(RoutingContext routingContext) {
 
-		System.err.println("find_getAllQueryManagefind_getAllQueryManagefind_getAllQueryManageenetered??????????????!!!!!!!!!!!!!!?!?!?!?!???");
-		WebClient client = WebClient.create(vertx);
+		logger.info("entered find_getAllQueryManage");
 
-		client.get(8090, "192.168.11.6", "/queryManage").send(ar -> {
+		WebClient client = WebClient.create(vertx);
+		
+		logger.info("requesting to get " + httpIP + ":" + port + "/queryManage");
+
+		client.get(port, httpIP, "/queryManage").send(ar -> {
 
 			if (ar.succeeded()) {
+				
+				logger.info("response from get " + httpIP + ":" + port + "/queryManage === success" );
 
 				JsonArray jsonArray = ar.result().bodyAsJsonArray();
 
@@ -481,6 +541,8 @@ public class QueryWebVerticle extends AbstractVerticle {
 				routingContext.response().end(jsonArray.toString());
 
 			} else {
+				
+				logger.info("response from get " + httpIP + ":" + port + "/queryManage === fail" );
 
 				routingContext.response().putHeader("Content-Type", "application/json;charset=UTF-8");
 				routingContext.response().end(new JsonObject().put("error", ar.cause().getMessage()).encode());
@@ -499,6 +561,8 @@ public class QueryWebVerticle extends AbstractVerticle {
 	 */
 	private void update_updateOneProperty(RoutingContext routingContext) {
 
+		logger.info("entered update_updateOneProperty");
+
 		WebClient client = WebClient.create(vertx);
 
 		String str = routingContext.getBodyAsString();
@@ -510,16 +574,20 @@ public class QueryWebVerticle extends AbstractVerticle {
 			jsonObject = (JSONObject) parser.parse(str);
 
 			Long id = (Long) jsonObject.get("id");
+			
+			logger.info("requesting to put " + httpIP + ":" + port + "/property/:id");
 
-			client.put(8090, "192.168.11.6", "/property/" + id).sendJson(jsonObject, ar -> {
+			client.put(port, httpIP, "/property/" + id).sendJson(jsonObject, ar -> {
 
 				if (ar.succeeded()) {
+					logger.info("response from put " + httpIP + ":" + port + "/property/:id === success" );
 
 					System.out.println("success");
 
 				} else {
 
-					System.out.println("fail");
+					logger.info("response from put " + httpIP + ":" + port + "/property/:id === fail" );
+					
 					routingContext.response().putHeader("Content-Type", "application/json;charset=UTF-8");
 					routingContext.response().end(new JsonObject().put("error", ar.cause().getMessage()).encode());
 
@@ -543,17 +611,22 @@ public class QueryWebVerticle extends AbstractVerticle {
 	 * 
 	 * @param routingContext
 	 */
-	@SuppressWarnings("deprecation")
 	private void find_getOneProperty(RoutingContext routingContext) {
 		
+		logger.info("entered find_getOneProperty");
+
 		WebClient client = WebClient.create(vertx);
 		
 		String id = routingContext.request().getParam("id");
 		
-		client.get(8090, "192.168.11.6", "/property/" + id).send(ar -> {
+		logger.info("requesting to get " + httpIP + ":" + port + "/property/:id");
+
+		client.get(port, httpIP, "/property/" + id).send(ar -> {
 			
 			if (ar.succeeded()) {
 				
+				logger.info("response from get " + httpIP + ":" + port + "/property/:id === success" );
+
 				JsonArray jsonArray = ar.result().bodyAsJsonArray();
 				
 				routingContext.response().putHeader("Content-Type", "application/json;charset=UTF-8");
@@ -561,6 +634,8 @@ public class QueryWebVerticle extends AbstractVerticle {
 				
 			} else {
 				
+				logger.info("response from get " + httpIP + ":" + port + "/property/:id === fail" );
+
 				routingContext.response().putHeader("Content-Type", "application/json;charset=UTF-8");
 				routingContext.response().end(new JsonObject().put("error", ar.cause().getMessage()).encode());
 			}
@@ -572,20 +647,24 @@ public class QueryWebVerticle extends AbstractVerticle {
 	 * 
 	 * @param routingContext
 	 */
-	@SuppressWarnings("deprecation")
 	private void query_addOneProperty(RoutingContext routingContext) {
 		
+		logger.info("entered query_addOneProperty");
+
 		WebClient client = WebClient.create(vertx);
 		
 		JsonObject json = routingContext.getBodyAsJson();
 		String id = (String) json.getValue("id");
 		String queryString = (String) json.getValue("queryString");
 		
-		
-		client.post(8090, "192.168.11.6", "/property")
+		logger.info("requesting to post " + httpIP + ":" + port + "/property");
+
+		client.post(port, httpIP, "/property")
 		.sendJsonObject(json, ar -> {
 			if (ar.succeeded()) {
 				
+				logger.info("response from post " + httpIP + ":" + port + "/property === success" );
+
 				JSONParser parser = new JSONParser();
 				JSONObject jsonObject = new JSONObject();
 				
@@ -607,6 +686,8 @@ public class QueryWebVerticle extends AbstractVerticle {
 				
 			} else {
 				
+				logger.info("response from post " + httpIP + ":" + port + "/property === fail" );
+
 				routingContext.response().putHeader("Content-Type", "application/json;charset=UTF-8");
 				routingContext.response().end(new JsonObject().put("error", ar.cause().getMessage()).encode());
 			}
@@ -619,23 +700,30 @@ public class QueryWebVerticle extends AbstractVerticle {
 	 * 
 	 * @param routingContext
 	 */
-	@SuppressWarnings("deprecation")
 	private void delete_deleteOneProperty(RoutingContext routingContext) {
 		
+		logger.info("entered delete_deleteOneProperty");
+
 		WebClient client = WebClient.create(vertx);
 		
 		JsonObject json = new JsonObject();
 		String id = routingContext.request().getParam("id");
 		
-		client.delete(8090, "192.168.11.6", "/property/" + id).send(ar -> {
+		logger.info("requesting to delete " + httpIP + ":" + port + "/property/:id");
+
+		client.delete(port, httpIP, "/property/" + id).send(ar -> {
 			
 			if (ar.succeeded()) {
 				
+				logger.info("response from delete " + httpIP + ":" + port + "/property/:id === success" );
+
 				System.out.println("success");
 				routingContext.response().end(ar.result().toString());
 				
 			} else {
 				
+				logger.info("response from delete " + httpIP + ":" + port + "/property/:id === fail" );
+
 				routingContext.response().putHeader("Content-Type", "application/json;charset=UTF-8");
 				routingContext.response().end(new JsonObject().put("error", ar.cause().getMessage()).encode());
 			}
@@ -648,16 +736,20 @@ public class QueryWebVerticle extends AbstractVerticle {
 	 * 
 	 * @param routingContext
 	 */
-	@SuppressWarnings("deprecation")
 	private void find_getAllProperty(RoutingContext routingContext) {
 		
-		System.err.println("enetered???????????????");
+		logger.info("entered find_getAllProperty");
+		
 		WebClient client = WebClient.create(vertx);
 		
-		client.get(8090, "192.168.11.6", "/property").send(ar -> {
+		logger.info("requesting to get " + httpIP + ":" + port + "/property");
+
+		client.get(port, httpIP, "/property").send(ar -> {
 			
 			if (ar.succeeded()) {
 				
+				logger.info("response from get " + httpIP + ":" + port + "/property === success" );
+
 				JsonArray jsonArray = ar.result().bodyAsJsonArray();
 				
 				routingContext.response().putHeader("Content-Type", "application/json;charset=UTF-8");
@@ -665,6 +757,8 @@ public class QueryWebVerticle extends AbstractVerticle {
 				
 			} else {
 				
+				logger.info("response from get " + httpIP + ":" + port + "/property === fail" );
+
 				routingContext.response().putHeader("Content-Type", "application/json;charset=UTF-8");
 				routingContext.response().end(new JsonObject().put("error", ar.cause().getMessage()).encode());
 			}
@@ -680,6 +774,8 @@ public class QueryWebVerticle extends AbstractVerticle {
 	 */
 	private void update_updateOneInstance(RoutingContext routingContext) {
 		
+		logger.info("entered update_updateOneInstance");
+
 		WebClient client = WebClient.create(vertx);
 		
 		String str = routingContext.getBodyAsString();
@@ -692,15 +788,18 @@ public class QueryWebVerticle extends AbstractVerticle {
 			
 			Long id = (Long) jsonObject.get("id");
 			
-			client.put(8090, "192.168.11.6", "/instance/" + id).sendJson(jsonObject, ar -> {
+			logger.info("requesting to put " + httpIP + ":" + port + "/instance/:id");
+
+			client.put(port, httpIP, "/instance/" + id).sendJson(jsonObject, ar -> {
 				
 				if (ar.succeeded()) {
 					
-					System.out.println("success");
+					logger.info("response from put " + httpIP + ":" + port + "/instance/:id === success" );
 					
 				} else {
 					
-					System.out.println("fail");
+					logger.info("response from put " + httpIP + ":" + port + "/instance/:id === fail" );
+					
 					routingContext.response().putHeader("Content-Type", "application/json;charset=UTF-8");
 					routingContext.response().end(new JsonObject().put("error", ar.cause().getMessage()).encode());
 					
@@ -711,6 +810,7 @@ public class QueryWebVerticle extends AbstractVerticle {
 		} catch (ParseException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
+			logger.error(e);
 			
 			routingContext.response().putHeader("Content-Type", "application/json;charset=UTF-8");
 			routingContext.response().end(new JsonObject().put("error", e.getMessage()).toString());
@@ -724,16 +824,60 @@ public class QueryWebVerticle extends AbstractVerticle {
 	 * 
 	 * @param routingContext
 	 */
-	@SuppressWarnings("deprecation")
 	private void find_getOneInstance(RoutingContext routingContext) {
+		
+		logger.info("entered find_getOneInstance");
+		
+		WebClient client = WebClient.create(vertx);
+		
+		String id = routingContext.request().getParam("id");
+		String role = routingContext.request().getParam("role");
+		String role_instance_id = routingContext.request().getParam("role_instance_id");
+		
+		logger.info("requesting to get " + httpIP + ":" + port + "/instance/:id");
+
+		client.get(port, httpIP, "/instance/" + id + "/" + role + "/" + role_instance_id).send(ar -> {
+			
+			if (ar.succeeded()) {
+				
+				logger.info("response from get " + httpIP + ":" + port + "/instance/:id === success" );
+
+				JsonArray jsonArray = ar.result().bodyAsJsonArray();
+				
+				routingContext.response().putHeader("Content-Type", "application/json;charset=UTF-8");
+				routingContext.response().end(jsonArray.toString());
+				
+			} else {
+				
+				logger.info("response from get " + httpIP + ":" + port + "/instance/:id === fail" );
+
+				routingContext.response().putHeader("Content-Type", "application/json;charset=UTF-8");
+				routingContext.response().end(new JsonObject().put("error", ar.cause().getMessage()).encode());
+			}
+		});
+	}
+	
+	/**
+	 * 하나의 쿼리 조회
+	 * 
+	 * @param routingContext
+	 */
+	private void find_getIDInstance(RoutingContext routingContext) {
+		
+		
+		logger.info("entered find_getIDInstance");
 		
 		WebClient client = WebClient.create(vertx);
 		
 		String id = routingContext.request().getParam("id");
 		
-		client.get(8090, "192.168.11.6", "/instance/" + id).send(ar -> {
+		logger.info("requesting to get " + httpIP + ":" + port + "/instance/:id");
+		
+		client.get(port, httpIP, "/instance/" + id).send(ar -> {
 			
 			if (ar.succeeded()) {
+				
+				logger.info("response from get " + httpIP + ":" + port + "/instance/:id === success" );
 				
 				JsonArray jsonArray = ar.result().bodyAsJsonArray();
 				
@@ -741,6 +885,8 @@ public class QueryWebVerticle extends AbstractVerticle {
 				routingContext.response().end(jsonArray.toString());
 				
 			} else {
+				
+				logger.info("response from get " + httpIP + ":" + port + "/instance/:id === fail" );
 				
 				routingContext.response().putHeader("Content-Type", "application/json;charset=UTF-8");
 				routingContext.response().end(new JsonObject().put("error", ar.cause().getMessage()).encode());
@@ -753,26 +899,32 @@ public class QueryWebVerticle extends AbstractVerticle {
 	 * 
 	 * @param routingContext
 	 */
-	@SuppressWarnings("deprecation")
 	private void query_addOneInstance(RoutingContext routingContext) {
 		
+		logger.info("entered query_addOneInstance");
+
 		WebClient client = WebClient.create(vertx);
 		
 		JsonObject json = routingContext.getBodyAsJson();
 		
-		client.post(8090, "192.168.11.6", "/instance")
+		logger.info("requesting to post " + httpIP + ":" + port + "/instance");
+
+		client.post(port, httpIP, "/instance")
 		.sendJsonObject(json, ar -> {
+			
 			if (ar.succeeded()) {
 				
+				logger.info("response from post " + httpIP + ":" + port + "/instance === success" );
+
 				JSONParser parser = new JSONParser();
-				JSONObject jsonObject = new JSONObject();
+				//JSONObject jsonObject = new JSONObject();
 				
 				try {
 					
-					jsonObject = (JSONObject) parser.parse(ar.result().bodyAsString());
+					JSONArray jsonarray = (JSONArray) parser.parse(ar.result().bodyAsString());
 					
 					routingContext.response().putHeader("Content-Type", "application/json;charset=UTF-8");
-					routingContext.response().end(jsonObject.toString());
+					routingContext.response().end(jsonarray.toString());
 					
 				} catch (ParseException e) {
 					// TODO Auto-generated catch block
@@ -784,7 +936,8 @@ public class QueryWebVerticle extends AbstractVerticle {
 				}
 				
 			} else {
-				
+				logger.info("response from post " + httpIP + ":" + port + "/instance === fail" );
+
 				routingContext.response().putHeader("Content-Type", "application/json;charset=UTF-8");
 				routingContext.response().end(new JsonObject().put("error", ar.cause().getMessage()).encode());
 			}
@@ -797,10 +950,10 @@ public class QueryWebVerticle extends AbstractVerticle {
 	 * 
 	 * @param routingContext
 	 */
-	@SuppressWarnings("deprecation")
 	private void delete_deleteOneInstance(RoutingContext routingContext) {
 		
-		System.err.println("entered delete_deleteOneInstance at QueryWebVerticle");
+		logger.info("entered delete_deleteOneInstance");
+
 		WebClient client = WebClient.create(vertx);
 		
 		String id = String.valueOf(routingContext.request().getParam("id"));
@@ -812,16 +965,20 @@ public class QueryWebVerticle extends AbstractVerticle {
 		json.put("role", role);
 		json.put("role_instance_id", role_instance_id);
 		
-		client.delete(8090, "192.168.11.6", "/instance").sendJson(json, ar -> {
+		logger.info("requesting to delete " + httpIP + ":" + port + "/instance");
+
+		client.delete(port, httpIP, "/instance").sendJson(json, ar -> {
 			
 			if (ar.succeeded()) {
 				
-				System.out.println("success");
+				logger.info("response from delete " + httpIP + ":" + port + "/instance === success" );
+				
 				routingContext.response().end(ar.result().toString());
 				
 			} else {
 				
-				System.out.println("connection failure to myrouteverticle");
+				logger.info("response from delete " + httpIP + ":" + port + "/instance === fail" );
+				
 				routingContext.response().putHeader("Content-Type", "application/json;charset=UTF-8");
 				routingContext.response().end(new JsonObject().put("error", ar.cause().getMessage()).encode());
 			}
@@ -834,17 +991,19 @@ public class QueryWebVerticle extends AbstractVerticle {
 	 * 
 	 * @param routingContext
 	 */
-	@SuppressWarnings("deprecation")
 	private void find_getAllInstance(RoutingContext routingContext) {
 		
 		logger.info("entered find_getAllInstance");
+		
 		WebClient client = WebClient.create(vertx);
 		
-		client.get(8090, "192.168.11.6", "/instance").send(ar -> {
+		logger.info("requesting to get " + httpIP + ":" + port + "/instance");
+
+		client.get(port, httpIP, "/instance").send(ar -> {
 			
 			if (ar.succeeded()) {
 				
-				logger.info("entered find_getAllInstance");
+				logger.info("response from get " + httpIP + ":" + port + "/instance === success" );
 
 				JsonArray jsonArray = ar.result().bodyAsJsonArray();
 				
@@ -853,6 +1012,8 @@ public class QueryWebVerticle extends AbstractVerticle {
 				
 			} else {
 				
+				logger.info("response from get " + httpIP + ":" + port + "/instance === fail" );
+
 				routingContext.response().putHeader("Content-Type", "application/json;charset=UTF-8");
 				routingContext.response().end(new JsonObject().put("error", ar.cause().getMessage()).encode());
 			}
