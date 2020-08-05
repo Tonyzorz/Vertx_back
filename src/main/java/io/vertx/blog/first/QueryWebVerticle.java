@@ -35,6 +35,7 @@ public class QueryWebVerticle extends AbstractVerticle {
 
 	private int port;
 	private String httpIP;
+	private static final String COL_ID = "queryId";
 	@Override
 	public void start(Future<Void> fut) throws Exception {
 
@@ -357,7 +358,7 @@ public class QueryWebVerticle extends AbstractVerticle {
 
 			jsonObject = (JSONObject) parser.parse(str);
 
-			String id = jsonObject.get("id").toString();
+			String id = jsonObject.get(COL_ID).toString();
 
 			logger.info("response from put " + httpIP + ":" + port + "/queryManage/:id === success" );
 
@@ -438,7 +439,7 @@ public class QueryWebVerticle extends AbstractVerticle {
 		WebClient client = WebClient.create(vertx);
 
 		JsonObject json = routingContext.getBodyAsJson();
-		String id = (String) json.getValue("id");
+		String id = (String) json.getValue(COL_ID);
 		String queryString = (String) json.getValue("queryString");
 		
 		logger.info("requesting to post " + httpIP + ":" + port + "/queryManage");
@@ -490,7 +491,7 @@ public class QueryWebVerticle extends AbstractVerticle {
 
 		WebClient client = WebClient.create(vertx);
 
-		String id = routingContext.request().getParam("id");
+		String id = routingContext.request().getParam(COL_ID);
 		
 		JsonObject json = new JsonObject(routingContext.getBodyAsString());
 		

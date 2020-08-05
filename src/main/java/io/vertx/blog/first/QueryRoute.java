@@ -84,7 +84,7 @@ public class QueryRoute extends AbstractVerticle {
 	private static final String CLASSPATH_FILE = "router.properties";
 	private static final String CLASSPATH_FILE_MESSAGE = "message.properties";
 	
-	private static final String COL_ID = "query_id";
+	private static final String COL_ID = "queryId";
 	private static final String COL_QSTR = "queryString";
 	private static final String COL_DESC = "descript";
 	private static final String COL_SQLT = "sqlType";
