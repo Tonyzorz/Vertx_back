@@ -17,6 +17,7 @@ import org.json.simple.parser.ParseException;
 import io.vertx.common.ValidationUtil;
 import io.vertx.common.XmlConvert;
 import io.vertx.common.message.MessageReturn;
+import io.vertx.common.message.QueryMessage;
 import io.vertx.common.message.RouterMessage;
 import io.vertx.core.AbstractVerticle;
 import io.vertx.core.AsyncResult;
@@ -24,6 +25,7 @@ import io.vertx.core.Future;
 import io.vertx.core.Handler;
 import io.vertx.core.VertxOptions;
 import io.vertx.core.eventbus.EventBus;
+import io.vertx.core.eventbus.Message;
 import io.vertx.core.http.HttpMethod;
 import io.vertx.core.http.HttpServer;
 import io.vertx.core.http.HttpServerResponse;
@@ -82,13 +84,14 @@ public class QueryRoute extends AbstractVerticle {
 	private static final String CLASSPATH_FILE = "router.properties";
 	private static final String CLASSPATH_FILE_MESSAGE = "message.properties";
 	
-	private static final String COL_ID = "id";
+	private static final String COL_ID = "query_id";
 	private static final String COL_QSTR = "queryString";
 	private static final String COL_DESC = "descript";
 	private static final String COL_SQLT = "sqlType";
 	private static final String ADDR = "address";
 	
 	private RouterMessage messageReturn;
+	private QueryMessage eventBusReturn;
 	
 	@Override
 	public void start(Future<Void> fut) throws ConfigurationException {
@@ -163,13 +166,13 @@ public class QueryRoute extends AbstractVerticle {
 		 * managing all routing with address related to query db
 		 */
 		String query = configuration.getString("router.query");
-		String query_address = configuration.getString("router.query_address");
+		String query_id = configuration.getString("router.query_id");
 
-		router.post(query_address).handler(this::selectQuery); // query router
-		router.get(query_address).handler(this::selectQuery);
-		router.delete(query_address).handler(this::selectQuery);
-		router.put(query_address).handler(this::selectQuery);
-		router.patch(query_address).handler(this::selectQuery);
+		router.post(query_id).handler(this::selectQuery); // query router
+		router.get(query_id).handler(this::selectQuery);
+		router.delete(query_id).handler(this::selectQuery);
+		router.put(query_id).handler(this::selectQuery);
+		router.patch(query_id).handler(this::selectQuery);
 		
 		/**
 		 * managing query database routing
@@ -198,7 +201,7 @@ public class QueryRoute extends AbstractVerticle {
 		router.delete(property_id).handler(this::deleteOneProperty);
 		
 		/**
-		 * property manage
+		 * instance manage
 		 */
 		String instance_id = configuration.getString("router.instance_id");
 		String instance = configuration.getString("router.instance");
@@ -226,6 +229,10 @@ public class QueryRoute extends AbstractVerticle {
 	    config().getInteger("http.port", 8085), next::handle);
 		//18085, next::handle);
 		
+		eb.consumer("vertx.selectQuery", message -> {
+
+			this.selectQueryEvb(message);
+		});
 
 	}
 
@@ -325,7 +332,7 @@ public class QueryRoute extends AbstractVerticle {
 			xmlCheck(routingContext);
 
 			// query 번호 받기
-			String idString = routingContext.request().getParam(ADDR);
+			String idString = routingContext.request().getParam(COL_ID);
 
 			// body에 값이 있을때 validation vertx 실행
 			if (!json.isEmpty()) {
@@ -336,7 +343,7 @@ public class QueryRoute extends AbstractVerticle {
 				if (validationValid) {
 
 					// 쿼리 id json에 저장
-					json.put(ADDR, idString);
+					json.put(COL_ID, idString);
 					
 					// query verticle
 					logger.info("attempting to connect to vertx.query verticle");
@@ -403,7 +410,7 @@ public class QueryRoute extends AbstractVerticle {
 
 				// eventbus를 통해 verticle에 보낼 json data
 				JsonObject jsons = new JsonObject();
-				jsons.put(ADDR, idString);
+				jsons.put(COL_ID, idString);
 
 				// query verticle
 				logger.info("attempting to connect to vertx.query verticle");
@@ -474,6 +481,110 @@ public class QueryRoute extends AbstractVerticle {
 			
 			logger.error("Exception has occurred");
 			messageReturn.commonReturn(routingContext, MessageReturn.RC_EXCEPTION_CODE, MessageReturn.RC_EXCEPTION_REASON, isXML);
+
+		}
+
+	}
+	
+	private void selectQueryEvb(Message<Object> message) {
+
+		logger.info("entered selectQuery");
+		
+		JSONParser parser = new JSONParser();
+
+		try {
+			
+			JSONObject json = (JSONObject) parser.parse(message.body().toString());
+			
+			// query 번호 받기
+			String idString = json.get(COL_ID).toString();
+
+			// body에 값이 있을때 validation vertx 실행
+			if (!json.isEmpty()) {
+				
+				boolean validationValid = this.checkSql(json.toString());
+				
+				// validation 문제 없을시 참
+				if (validationValid) {
+
+					// 쿼리 id json에 저장
+					json.put(COL_ID, idString);
+					
+					// query verticle
+					logger.info("attempting to connect to vertx.query verticle");
+					
+					eb.request("vertx.query", json.toString(), result -> {
+						
+						logger.info("finished connection with vertx.query verticle");
+
+						if (result.succeeded()) {
+							
+							String res = result.result().body().toString();
+								
+							logger.info("Successfully returned data in json format");
+							message.reply(res);
+
+						} else {
+							
+							logger.error("failed executing inside vertx.query");
+							eventBusReturn.commonReturn(message, MessageReturn.RC_VERTICLE_FAIL_CODE, MessageReturn.RC_VERTICLE_FAIL_REASON);
+						}
+					});
+
+					// validation verticle통해 결과가 false, body에 문제가 있다
+				} else {
+					
+					logger.warn("Validation problem occurred");
+					eventBusReturn.commonReturn(message, MessageReturn.VC_PROBLEM_CODE, MessageReturn.VC_PROBLEM_REASON);
+					
+				}
+
+				// body가 없으니 validation vertx실행안하고 바로 vertx.query를 실행한다
+			} else {
+
+				// eventbus를 통해 verticle에 보낼 json data
+				JsonObject jsons = new JsonObject();
+				jsons.put(COL_ID, idString);
+
+				// query verticle
+				logger.info("attempting to connect to vertx.query verticle");
+				
+				eb.request("vertx.query", jsons.toString(), result -> {
+					
+					logger.info("finished connection with vertx.query verticle");
+
+					if (result.succeeded()) {
+						
+						String res = result.result().body().toString();
+							
+						logger.info("Successfully returned data in json format");
+						message.reply(res);
+						
+					} else {
+						
+						logger.error("failed executing inside vertx.query");
+						eventBusReturn.commonReturn(message, MessageReturn.RC_VERTICLE_FAIL_CODE, MessageReturn.RC_VERTICLE_FAIL_REASON);
+
+					}
+
+				});
+			}
+
+		} catch(NullPointerException e) {
+			
+			logger.error("NullPointerException occurred");
+			eventBusReturn.commonReturn(message, MessageReturn.RC_NULL_POINTER_EXCEPTION_CODE, MessageReturn.RC_NULL_POINTER_EXCEPTION_REASON);
+	
+		} catch(DecodeException e) {
+			
+			logger.error("DecodeException has occurred");
+			eventBusReturn.commonReturn(message, MessageReturn.RC_DECODE_EXCEPTION_CODE, MessageReturn.RC_DECODE_EXCEPTION_REASON);
+
+			
+		} catch(Exception e) {
+			
+			logger.error("Exception has occurred");
+			eventBusReturn.commonReturn(message, MessageReturn.RC_EXCEPTION_CODE, MessageReturn.RC_EXCEPTION_REASON);
 
 		}
 

@@ -332,7 +332,7 @@ public class QueryManage extends AbstractVerticle {
 				e1.printStackTrace();
 			}
 
-			String queryFinalString = "SELECT * FROM "+TABLE_NAME+" WHERE ID= '" + messageJson.get("id") + "' AND ROLE= '"+ROLE+"'";
+			String queryFinalString = "SELECT * FROM "+TABLE_NAME+" WHERE ID= '" + messageJson.get("query_id") + "' AND ROLE= '"+ROLE+"'";
 
 			connection.query(queryFinalString, finalResult -> {
 

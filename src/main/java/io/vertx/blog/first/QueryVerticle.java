@@ -52,6 +52,7 @@ public class QueryVerticle extends AbstractVerticle {
 	
 	private QueryMessage messageReturn;
 
+	private static final String COL_ID = "query_id";
 	private static final String ASYNCMAP_NAME = "mysql";
 	/**
 	 * This method is called when the verticle is deployed. It creates a HTTP server
@@ -131,7 +132,7 @@ public class QueryVerticle extends AbstractVerticle {
 			try {
 				JSONObject messageJson = (JSONObject) parser.parse(message.body().toString());
 				
-				String queryNum = String.valueOf(messageJson.get("address"));				
+				String queryNum = messageJson.get(COL_ID).toString();				
 				
 				sharedData.getAsyncMap(asyncMapName, results -> {
 
