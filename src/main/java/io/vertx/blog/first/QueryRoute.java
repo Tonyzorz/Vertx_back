@@ -85,10 +85,11 @@ public class QueryRoute extends AbstractVerticle {
 	private static final String CLASSPATH_FILE = "router.properties";
 	private static final String CLASSPATH_FILE_MESSAGE = "message.properties";
 	
-	private static final String COL_ID = "query_id";
+	private static final String COL_ID = "qId";
 	private static final String COL_QSTR = "queryString";
 	private static final String COL_DESC = "descript";
 	private static final String COL_SQLT = "sqlType";
+	private static final String COL_ROLE = "role";
 	private static final String ADDR = "address";
 	
 	private RouterMessage messageReturn;
@@ -332,27 +333,27 @@ public class QueryRoute extends AbstractVerticle {
 			JSONParser parser = new JSONParser();
 			json = (JSONObject) parser.parse(routingContext.getBodyAsString());
 			
-			if(json.containsKey("role") || json.containsKey("sqlType")) {
+			if(json.containsKey(COL_ROLE) || json.containsKey(COL_SQLT)) {
 				
 				json.put(ADDR, "searchEqualQueryManage");
 			
-				if("".equals(json.get("role"))) {
-					json.remove("role");
+				if("".equals(json.get(COL_ROLE))) {
+					json.remove(COL_ROLE);
 				}
 				
-				if("".equals(json.get("sqlType"))) {
-					json.remove("sqlType");
+				if("".equals(json.get(COL_SQLT))) {
+					json.remove(COL_SQLT);
 				}
 			} else {
 				
 				json.put(ADDR, "searchLikeQueryManage");
 				
-				if("".equals(json.get("queryString"))) {
-					json.remove("queryString");
+				if("".equals(json.get(COL_QSTR))) {
+					json.remove(COL_QSTR);
 				}
 				
-				if("".equals(json.get("descript"))) {
-					json.remove("descript");
+				if("".equals(json.get(COL_DESC))) {
+					json.remove(COL_DESC);
 				}
 			}
 			
@@ -753,7 +754,7 @@ public class QueryRoute extends AbstractVerticle {
 		logger.info("Entered getOneQueryManage");
 		
 		try {
-			final String id = routingContext.request().getParam(COL_ID);
+			final String id = routingContext.request().getParam("id");
 	
 			// 올바른 정보 입력
 			if (!id.equals(null)) {

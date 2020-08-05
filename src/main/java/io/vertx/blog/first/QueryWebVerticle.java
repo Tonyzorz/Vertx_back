@@ -33,6 +33,12 @@ public class QueryWebVerticle extends AbstractVerticle {
 	private static Logger logger = Logger.getLogger(QueryWebVerticle.class);
 	private SharedData sharedData;
 	private WebClient webClient;
+	
+	private static final String COL_ID = "qId";
+	private static final String COL_QSTR = "queryString";
+	private static final String COL_DESC = "descript";
+	private static final String COL_SQLT = "sqlType";
+	private static final String ADDR = "address";
 
 	private int port;
 	private String httpIP;
@@ -356,7 +362,7 @@ public class QueryWebVerticle extends AbstractVerticle {
 
 			jsonObject = (JSONObject) parser.parse(str);
 
-			String id = jsonObject.get("id").toString();
+			String id = jsonObject.get(COL_ID).toString();
 
 			logger.info("response from put " + httpIP + ":" + port + "/queryManage/:id === success" );
 
@@ -477,18 +483,14 @@ public class QueryWebVerticle extends AbstractVerticle {
 						logger.info("response from post " + httpIP + ":" + port + "/queryManage/search === success" );
 
 						JSONParser parser = new JSONParser();
-						JSONObject jsonObject = new JSONObject();
 						JSONArray array = new JSONArray();
 						try {
 							array = (JSONArray) parser.parse(ar.result().bodyAsString());
-							//jsonObject = (JSONObject) parser.parse(ar.result().bodyAsString());
-							//JsonArray jsonArray = ar.result().bodyAsJsonArray();
 
 							routingContext.response().putHeader("Content-Type", "application/json;charset=UTF-8");
 							routingContext.response().end(array.toString());
 
 						} catch (ParseException e) {
-							// TODO Auto-generated catch block
 							e.printStackTrace();
 
 							routingContext.response().putHeader("Content-Type", "application/json;charset=UTF-8");
@@ -519,8 +521,6 @@ public class QueryWebVerticle extends AbstractVerticle {
 		WebClient client = WebClient.create(vertx);
 
 		JsonObject json = routingContext.getBodyAsJson();
-		String id = (String) json.getValue("id");
-		String queryString = (String) json.getValue("queryString");
 		
 		logger.info("requesting to post " + httpIP + ":" + port + "/queryManage");
 
@@ -571,7 +571,7 @@ public class QueryWebVerticle extends AbstractVerticle {
 
 		WebClient client = WebClient.create(vertx);
 
-		String id = routingContext.request().getParam("id");
+		String id = routingContext.request().getParam(COL_ID);
 		
 		JsonObject json = new JsonObject(routingContext.getBodyAsString());
 		

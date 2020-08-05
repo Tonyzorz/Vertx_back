@@ -63,6 +63,13 @@ public class QueryManage extends AbstractVerticle {
 	private static String QUERY_STRING = null;
 	private static String ROLE = null;
 			
+	private static final String COL_ID = "qId";
+	private static final String COL_QSTR = "queryString";
+	private static final String COL_DESC = "descript";
+	private static final String COL_SQLT = "sqlType";
+	private static final String COL_ROLE = "role";
+	private static final String ADDR = "address";
+	
 	private QueryMessage messageReturn;
 
 	/**
@@ -128,7 +135,7 @@ public class QueryManage extends AbstractVerticle {
 			JSONParser parser = new JSONParser();
 			SQLConnection connection = ar.result();
 
-			connection.query("SELECT * FROM " + TABLE_NAME + " WHERE ROLE= '"+ROLE+"'", results -> {
+			connection.query("SELECT * FROM " + TABLE_NAME + " WHERE "+ COL_ROLE +"= '"+ROLE+"'", results -> {
 
 				// 쿼리 목록 결과
 				List<JsonObject> fromDBQueryList = results.result().getRows();
@@ -153,9 +160,9 @@ public class QueryManage extends AbstractVerticle {
 						logger.error(e);
 					}
 					
-					tempId = tempData.get("id").toString();
-					String tempEnc = tempData.get("queryString").toString();
-					sqlType = tempData.get("sqlType").toString().toLowerCase();
+					tempId = tempData.get(COL_ID).toString();
+					String tempEnc = tempData.get(COL_QSTR).toString();
+					sqlType = tempData.get(COL_SQLT).toString().toLowerCase();
 					
 					try {
 						String tempDec = AES256Util.AES_Decode(tempEnc);
@@ -193,9 +200,9 @@ public class QueryManage extends AbstractVerticle {
 							logger.error(ex);
 						}						
 						
-						tempId = tempData.get("id").toString();
-						tempQuery = tempData.get("queryString").toString();
-						sqlType = tempData.get("sqlType").toString().toLowerCase();
+						tempId = tempData.get(COL_ID).toString();
+						tempQuery = tempData.get(COL_QSTR).toString();
+						sqlType = tempData.get(COL_SQLT).toString().toLowerCase();
 						
 					} catch (BadPaddingException e) {
 						// TODO Auto-generated catch block
@@ -339,7 +346,7 @@ public class QueryManage extends AbstractVerticle {
 				e1.printStackTrace();
 			}
 
-			String queryFinalString = "SELECT * FROM "+TABLE_NAME+" WHERE ID= '" + messageJson.get("query_id") + "' AND ROLE= '"+ROLE+"'";
+			String queryFinalString = "SELECT * FROM "+TABLE_NAME+" WHERE "+ COL_ID +"= '" + messageJson.get(COL_ID) + "' AND "+ COL_ROLE +"= '"+ROLE+"'";
 
 			connection.query(queryFinalString, finalResult -> {
 
@@ -370,9 +377,9 @@ public class QueryManage extends AbstractVerticle {
 								logger.error(e);
 							}
 
-							tempId = tempData.get("id").toString();
-							tempQuery = tempData.get("queryString").toString();
-							sqlType = tempData.get("sqlType").toString().toLowerCase();
+							tempId = tempData.get(COL_ID).toString();
+							tempQuery = tempData.get(COL_QSTR).toString();
+							sqlType = tempData.get(COL_SQLT).toString().toLowerCase();
 						}
 
 						
@@ -443,7 +450,7 @@ public class QueryManage extends AbstractVerticle {
 			SQLConnection connection = ar.result();
 
 			JSONParser parser = new JSONParser();
-			String queryFinalString = "SELECT * FROM "+TABLE_NAME+" WHERE ROLE= '"+ROLE+"'";
+			String queryFinalString = "SELECT * FROM "+TABLE_NAME+" WHERE "+ COL_ROLE + "= '"+ROLE+"'";
 
 			connection.query(queryFinalString, finalResult -> {
 
@@ -473,9 +480,9 @@ public class QueryManage extends AbstractVerticle {
 								logger.error(e);
 							}
 
-							tempId = tempData.get("id").toString();
-							tempQuery = tempData.get("queryString").toString();
-							sqlType = tempData.get("sqlType").toString().toLowerCase();
+							tempId = tempData.get(COL_ID).toString();
+							tempQuery = tempData.get(COL_QSTR).toString();
+							sqlType = tempData.get(COL_SQLT).toString().toLowerCase();
 							
 							try {
 								String afterConverted = AES256Util.AES_Decode(tempQuery);
@@ -577,8 +584,8 @@ public class QueryManage extends AbstractVerticle {
 								
 								JsonObject tempPlace = new JsonObject(resultList.get(i).toString());
 								
-								String tempId = String.valueOf(tempPlace.getValue("id"));
-								tempPlace.remove("id");
+								String tempId = String.valueOf(tempPlace.getValue(COL_ID));
+								tempPlace.remove(COL_ID);
 								
 								String beforeConverted = tempPlace.getValue(QUERY_STRING).toString();
 								String afterConverted = AES256Util.AES_Decode(beforeConverted);
@@ -609,7 +616,7 @@ public class QueryManage extends AbstractVerticle {
 								//현재로서는 그냥 담기 
 								JsonObject tempPlace = new JsonObject(resultList.get(i).toString());
 								
-								String tempId = String.valueOf(tempPlace.getValue("id"));
+								String tempId = String.valueOf(tempPlace.getValue(COL_ID));
 								String beforeConverted = tempPlace.getValue(QUERY_STRING).toString();
 								
 								tempPlace.put(QUERY_STRING, beforeConverted);
@@ -693,13 +700,13 @@ public class QueryManage extends AbstractVerticle {
 		try {
 			json = (JSONObject) parser.parse(message.body().toString());
 
-			String id = json.get("id").toString();
-			String sqlType = json.get("sqlType").toString().toLowerCase();
+			String id = json.get(COL_ID).toString();
+			String sqlType = json.get(COL_SQLT).toString().toLowerCase();
 
 			jdbc.getConnection(ar -> {
 				SQLConnection connection = ar.result();
 
-				String queryFinalString = "DELETE FROM " + TABLE_NAME +" WHERE ID='" + id + "' AND ROLE= '" + ROLE + "'";
+				String queryFinalString = "DELETE FROM " + TABLE_NAME +" WHERE "+ COL_ID +" ='" + id + "' AND "+ COL_ROLE + "= '" + ROLE + "'";
 				
 				queryConnectionAll(queryFinalString, connection, message);
 				
@@ -727,10 +734,10 @@ public class QueryManage extends AbstractVerticle {
 		try {
 
 			JSONObject parsedBodyData = (JSONObject) parser.parse(bodyDataBeforeParsing);
-			String id = parsedBodyData.get("id").toString();
+			String id = parsedBodyData.get(COL_ID).toString();
 			String queryString = parsedBodyData.get(QUERY_STRING).toString();
-			String desc = parsedBodyData.get("descript").toString();
-			String sqlType = parsedBodyData.get("sqlType").toString().toLowerCase();
+			String desc = parsedBodyData.get(COL_DESC).toString();
+			String sqlType = parsedBodyData.get(COL_SQLT).toString().toLowerCase();
 			 
 			try {
 				String encodedValue = AES256Util.AES_Encode( queryString );
@@ -740,11 +747,11 @@ public class QueryManage extends AbstractVerticle {
 					SQLConnection connection = ar.result();
 					
 					String queryFinalString = "UPDATE "+ TABLE_NAME
-					+ " SET ID='" + id + "', " 
+					+ " SET "+ COL_ID +"='" + id + "', " 
 					+ QUERY_STRING + "= '" + encodedValue + "', " 
-					+ "DESCRIPT= '" + desc + "', " 
-					+ "SQLTYPE= '" + sqlType + "' " 
-					+ "WHERE ID= '"+ id +"' AND ROLE= '" + ROLE + "'";
+					+ COL_DESC + " = '" + desc + "', " 
+					+ COL_SQLT + " = '" + sqlType + "' " 
+					+ "WHERE "+ COL_ID + " = '"+ id +"' AND " + COL_ROLE + " = '" + ROLE + "'";
 					
 					queryConnectionAll(queryFinalString, connection, message);
 					
@@ -803,16 +810,16 @@ public class QueryManage extends AbstractVerticle {
 			try {
 				String queryString = resultList.get(QUERY_STRING).toString();
 				String encodedValue = AES256Util.AES_Encode(queryString);
-				String id = resultList.get("id").toString();
-				String desc = resultList.get("descript").toString();
-				String sqlType = resultList.get("sqlType").toString().toLowerCase();				
-				String role = resultList.get("role").toString().toLowerCase();				
+				String id = resultList.get(COL_ID).toString();
+				String desc = resultList.get(COL_DESC).toString();
+				String sqlType = resultList.get(COL_SQLT).toString().toLowerCase();				
+				String role = resultList.get(COL_ROLE).toString().toLowerCase();				
 
 				jdbc.getConnection(ar -> {
 
 					SQLConnection connection = ar.result();
 					
-					String queryFinalString = "INSERT INTO "+TABLE_NAME+" (ID, "+QUERY_STRING+", DESCRIPT, SQLTYPE, ROLE) VALUES ('"+id+"', '"
+					String queryFinalString = "INSERT INTO "+TABLE_NAME+" ("+ COL_ID + ", "+QUERY_STRING+", " + COL_DESC + ", " + COL_SQLT + ", "+COL_ROLE +" ) VALUES ('"+id+"', '"
 							+encodedValue+"', '"+desc+"', '"+sqlType+"', '"+role+"')";
 					
 					//System.out.println("queryFinalString : " + queryFinalString);
@@ -864,7 +871,7 @@ public class QueryManage extends AbstractVerticle {
 
 			SQLConnection connection = ar.result();
 
-			String queryFinalString = "SELECT * FROM "+TABLE_NAME+" WHERE ROLE= '"+ROLE+"'";
+			String queryFinalString = "SELECT * FROM "+TABLE_NAME+" WHERE " + COL_ROLE + " = '"+ROLE+"'";
 
 			queryConnectionAll(queryFinalString, connection, message);
 
@@ -885,7 +892,7 @@ public class QueryManage extends AbstractVerticle {
 
 				SQLConnection connection = ar.result();
 
-				String queryFinalString = "SELECT * FROM "+TABLE_NAME+" WHERE ID= '" + json.get("id").toString() + "' AND ROLE= '"+ROLE+"'";
+				String queryFinalString = "SELECT * FROM "+TABLE_NAME+" WHERE "+ COL_ID + "= '" + json.get(COL_ID).toString() + "' AND " + COL_ROLE + "= '"+ROLE+"'";
 
 				queryConnectionAll(queryFinalString, connection, message);
 
@@ -916,19 +923,19 @@ public class QueryManage extends AbstractVerticle {
 				String edit = "SELECT * FROM " + TABLE_NAME + " WHERE ";
 				
 				
-				if(json.containsKey("sqlType") && json.containsKey("role")) {
+				if(json.containsKey(COL_SQLT) && json.containsKey("role")) {
 					
-					edit = edit + "sqlType = '" + json.get("sqlType") 
-								+ "' and role ='" + json.get("role") + "'";
+					edit = edit + COL_SQLT +" = '" + json.get(COL_SQLT) 
+						+ "' and " + COL_ROLE + " ='" + json.get(COL_ROLE) + "'";
 					
 				} else if(json.containsKey("sqlType")) {
 					
-					edit = edit + "sqlType = '" + json.get("sqlType") 
+					edit = edit + COL_SQLT +" = '" + json.get(COL_SQLT) 
 					+ "'";
 					
 				} else {
 					
-					edit = edit + "role = '" + json.get("role") 
+					edit = edit  + COL_ROLE + " ='" + json.get(COL_ROLE) 
 					+ "'";
 					
 				}
@@ -966,19 +973,19 @@ public class QueryManage extends AbstractVerticle {
 				String edit = "SELECT * FROM " + TABLE_NAME + " WHERE ";
 				
 				
-				if(json.containsKey("queryString") && json.containsKey("descript")) {
+				if(json.containsKey(COL_QSTR) && json.containsKey(COL_DESC)) {
 					
-					edit = edit + "queryString  LIKE '%" + json.get("queryString") 
-					+ "%' AND descript LIKE '%" + json.get("descript") + "%'";
+					edit = edit + COL_QSTR + " LIKE '%" + json.get(COL_QSTR) 
+					+ "%' AND " + COL_DESC + " LIKE '%" + json.get(COL_DESC) + "%'";
 					
-				} else if(json.containsKey("queryString")) {
+				} else if(json.containsKey(COL_QSTR)) {
 					
-					edit = edit + "queryString LIKE '%" + json.get("queryString") 
+					edit = edit + COL_QSTR + " LIKE '%" + json.get(COL_QSTR) 
 					+ "%'";
 					
 				} else {
 					
-					edit = edit + "descript LIKE '%" + json.get("descript") 
+					edit = edit + COL_DESC + " LIKE '%" + json.get(COL_DESC) 
 					+ "%'";
 					
 				}
