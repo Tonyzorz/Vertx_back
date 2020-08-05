@@ -1,6 +1,7 @@
 {
   "http.port" : 8090,
   "webLogic.port" : 18090,
+  "scsLogic.port" : 8089,
   "url": "jdbc:mariadb://192.168.11.6:3307/test",
   "driver_class": "org.mariadb.jdbc.Driver",
   "user": "root",
@@ -9,5 +10,10 @@
   "username": "root",
   "authSource" : "admin",
   "role" : "user",
-  "package_nm" : "io.vertx.blog.first."
+  "package_nm" : "io.vertx.blog.first.",
+  "http.ip" : "192.168.11.6",
+
+
+  "scs_role" : "scs",
+  "scs_package_nm" : "io.vertx.scs."
 }

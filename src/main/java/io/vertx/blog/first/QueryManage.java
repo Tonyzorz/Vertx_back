@@ -5,6 +5,7 @@ import java.security.InvalidAlgorithmParameterException;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
 import java.sql.SQLException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -282,6 +283,12 @@ public class QueryManage extends AbstractVerticle {
 			} else if (address.equals("deleteOneQueryManage")) {
 
 				deleteOneQueryManage(message);
+			} else if (address.equals("searchEqualQueryManage")) {
+			
+				searchEqualQueryManage(message);
+			} else if (address.equals("searchLikeQueryManage")) {
+			
+				searchLikeQueryManage(message);
 			}
 		});
 
@@ -615,7 +622,6 @@ public class QueryManage extends AbstractVerticle {
 							}
 							
 						}
-						
 						message.reply(resultList.toString());
 						
 						logger.info("Succeeded getting data from select query");
@@ -800,13 +806,14 @@ public class QueryManage extends AbstractVerticle {
 				String id = resultList.get("id").toString();
 				String desc = resultList.get("descript").toString();
 				String sqlType = resultList.get("sqlType").toString().toLowerCase();				
-				
+				String role = resultList.get("role").toString().toLowerCase();				
+
 				jdbc.getConnection(ar -> {
 
 					SQLConnection connection = ar.result();
 					
 					String queryFinalString = "INSERT INTO "+TABLE_NAME+" (ID, "+QUERY_STRING+", DESCRIPT, SQLTYPE, ROLE) VALUES ('"+id+"', '"
-							+encodedValue+"', '"+desc+"', '"+sqlType+"', '"+ROLE+"')";
+							+encodedValue+"', '"+desc+"', '"+sqlType+"', '"+role+"')";
 					
 					//System.out.println("queryFinalString : " + queryFinalString);
 
@@ -889,6 +896,108 @@ public class QueryManage extends AbstractVerticle {
 			logger.warn(e);
 			messageReturn.commonReturn(message, MessageReturn.QC_PARSE_EXCEPTION_CODE, MessageReturn.QC_PARSE_EXCEPTION_REASON);
 
+		}
+	}
+	
+	private void searchEqualQueryManage(Message<Object> message) {
+		
+		logger.info("entered searchQueryManage");
+		
+		JSONParser parser = new JSONParser();
+		try {
+			
+			JSONObject json = (JSONObject) parser.parse(message.body().toString());
+			json.remove("address");
+			
+			jdbc.getConnection(ar -> {
+				
+				SQLConnection connection = ar.result();
+			
+				String edit = "SELECT * FROM " + TABLE_NAME + " WHERE ";
+				
+				
+				if(json.containsKey("sqlType") && json.containsKey("role")) {
+					
+					edit = edit + "sqlType = '" + json.get("sqlType") 
+								+ "' and role ='" + json.get("role") + "'";
+					
+				} else if(json.containsKey("sqlType")) {
+					
+					edit = edit + "sqlType = '" + json.get("sqlType") 
+					+ "'";
+					
+				} else {
+					
+					edit = edit + "role = '" + json.get("role") 
+					+ "'";
+					
+				}
+		
+				System.err.println(edit);
+				//String queryFinalString = "SELECT * FROM "+TABLE_NAME+" WHERE ID= '" + json.get("id").toString() + "' AND ROLE= '"+ROLE+"'";
+				String queryFinalString = edit;
+				
+				queryConnectionAll(queryFinalString, connection, message);
+				
+			});
+			
+		} catch (ParseException e) {
+			
+			logger.warn(e);
+			messageReturn.commonReturn(message, MessageReturn.QC_PARSE_EXCEPTION_CODE, MessageReturn.QC_PARSE_EXCEPTION_REASON);
+			
+		}
+	}
+	
+	private void searchLikeQueryManage(Message<Object> message) {
+		
+		logger.info("entered searchQueryManage");
+		
+		JSONParser parser = new JSONParser();
+		try {
+			
+			JSONObject json = (JSONObject) parser.parse(message.body().toString());
+			json.remove("address");
+			
+			jdbc.getConnection(ar -> {
+				
+				SQLConnection connection = ar.result();
+				
+				String edit = "SELECT * FROM " + TABLE_NAME + " WHERE ";
+				
+				
+				if(json.containsKey("queryString") && json.containsKey("descript")) {
+					
+					edit = edit + "queryString  LIKE '%" + json.get("queryString") 
+					+ "%' AND descript LIKE '%" + json.get("descript") + "%'";
+					
+				} else if(json.containsKey("queryString")) {
+					
+					edit = edit + "queryString LIKE '%" + json.get("queryString") 
+					+ "%'";
+					
+				} else {
+					
+					edit = edit + "descript LIKE '%" + json.get("descript") 
+					+ "%'";
+					
+				}
+				
+				
+				
+				System.err.println(edit);
+				//String queryFinalString = "SELECT * FROM "+TABLE_NAME+" WHERE ID= '" + json.get("id").toString() + "' AND ROLE= '"+ROLE+"'";
+				String queryFinalString = edit;
+				
+				queryConnectionAll(queryFinalString, connection, message);
+				
+			});
+			
+		} catch (ParseException e) {
+			
+			logger.warn(e);
+			messageReturn.commonReturn(message, MessageReturn.QC_PARSE_EXCEPTION_CODE, MessageReturn.QC_PARSE_EXCEPTION_REASON);
+			
 		}
 	}
 	

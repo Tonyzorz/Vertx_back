@@ -150,7 +150,10 @@ public class InstanceManage extends AbstractVerticle {
 			} else if (address.equals("deleteOneInstance")) {
 
 				deleteOneInstance(message);
-			}
+			} else if (address.equals("getIDInstance")) {
+			
+				getIDInstance(message);
+			} 
 		});
 
 
@@ -407,11 +410,50 @@ public class InstanceManage extends AbstractVerticle {
 
 			JSONObject json = (JSONObject) parser.parse(message.body().toString());
 
+			String id = json.get(COLUMN_ID).toString();
+			String role = json.get(COLUMN_ROLE).toString();
+			String role_instance_id = json.get(COLUMN_ROLE_INSTANCE_ID).toString();
+			
 			jdbc.getConnection(ar -> {
 
 				SQLConnection connection = ar.result();
 
-				String queryFinalString = "SELECT * FROM "+ TABLE_NAME +" WHERE id=" + json.get("id");
+				String queryFinalString = "SELECT * FROM "+ TABLE_NAME 
+						+" WHERE id='" + id
+						+"'and  role='" + role
+						+"'and  role_instance_id='" + role_instance_id + "'";
+
+				queryConnectionAll(queryFinalString, connection, message);
+
+			});
+
+		} catch (ParseException e) {
+
+			e.printStackTrace();
+			logger.error(e);
+			messageReturn.commonReturn(message, MessageReturn.QC_PARSE_EXCEPTION_CODE, MessageReturn.QC_PARSE_EXCEPTION_REASON);
+
+		}
+	}
+	
+	private void getIDInstance(Message<Object> message) {
+
+		logger.info("entered getIDInstance");
+
+		JSONParser parser = new JSONParser();
+		try {
+
+			JSONObject json = (JSONObject) parser.parse(message.body().toString());
+
+			String id = json.get(COLUMN_ID).toString();
+			
+			jdbc.getConnection(ar -> {
+
+				SQLConnection connection = ar.result();
+
+				String queryFinalString = "SELECT * FROM "+ TABLE_NAME 
+						+" WHERE id=" + id;
+
 
 				queryConnectionAll(queryFinalString, connection, message);
 

@@ -2,6 +2,7 @@ package io.vertx.blog.first;
 
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -180,9 +181,14 @@ public class QueryRoute extends AbstractVerticle {
 		router.get(queryManage).handler(this::getAllQueryManage);
 		router.get(queryManage_id).handler(this::getOneQueryManage);
 		router.post(queryManage).handler(this::addOneQueryManage);
+		
 		router.route(queryManage_id).method(HttpMethod.PATCH).method(HttpMethod.PUT)
 				.handler(this::updateOneQueryManage);
 		router.delete(queryManage_id).handler(this::deleteOneQueryManage);
+		
+		router.post("/queryManage/search").handler(this::searchQueryManage);
+		router.post(queryManage).handler(this::addOneQueryManage);
+		router.post(queryManage).handler(this::addOneQueryManage);
 		
 		/**
 		 * property manage
@@ -204,7 +210,8 @@ public class QueryRoute extends AbstractVerticle {
 		String instance = configuration.getString("router.instance");
 		
 		router.get(instance).handler(this::getAllInstance);
-		router.get(instance_id).handler(this::getOneInstance);
+		router.get("/instance/:id/:role/:role_instance_id").handler(this::getOneInstance);
+		router.get(instance_id).handler(this::getIDInstance);
 		router.post(instance).handler(this::addOneInstance);
 		router.route(instance_id).method(HttpMethod.PATCH).method(HttpMethod.PUT)
 		.handler(this::updateOneInstance);
@@ -303,6 +310,89 @@ public class QueryRoute extends AbstractVerticle {
 
 	}
 
+	/**
+	 * Select one query data with specified id
+	 * 
+	 * @param routingContext
+	 */
+	private void searchQueryManage(RoutingContext routingContext) {
+
+		logger.info("Entered searchQueryManage");
+		
+		try {
+			
+			JSONObject json = new JSONObject();
+			JSONParser parser = new JSONParser();
+			json = (JSONObject) parser.parse(routingContext.getBodyAsString());
+			
+			if(json.containsKey("role") || json.containsKey("sqlType")) {
+				
+				json.put(ADDR, "searchEqualQueryManage");
+			
+				if("".equals(json.get("role"))) {
+					json.remove("role");
+				}
+				
+				if("".equals(json.get("sqlType"))) {
+					json.remove("sqlType");
+				}
+			} else {
+				
+				json.put(ADDR, "searchLikeQueryManage");
+				
+				if("".equals(json.get("queryString"))) {
+					json.remove("queryString");
+				}
+				
+				if("".equals(json.get("descript"))) {
+					json.remove("descript");
+				}
+			}
+			
+			System.out.println("final json " + json);
+			
+			logger.info("attempting to connect to vertx.queryManage verticle");
+
+			eb.request("vertx.queryManage", json.toString(), reply -> {
+
+				// 요청 성공시
+				if (reply.succeeded()) {
+					
+					logger.info("vertx.queryManage success");
+					String res = reply.result().body().toString();
+
+					logger.info("Successfully returned data in json format");
+					routingContext.response().putHeader("content-type", "application/json; charset=utf-8")
+					.end(res);
+
+					// 요청 실패시
+				} else {
+
+					logger.error("failed executing inside vertx.queryManage");
+					messageReturn.commonReturn(routingContext, MessageReturn.RC_VERTICLE_FAIL_CODE, MessageReturn.RC_VERTICLE_FAIL_REASON, isXML);
+
+				}
+			});
+
+		} catch(NullPointerException e) {
+			
+			logger.error("NullPointerException occurred");
+			messageReturn.commonReturn(routingContext, MessageReturn.RC_NULL_POINTER_EXCEPTION_CODE, MessageReturn.RC_NULL_POINTER_EXCEPTION_REASON, isXML);
+	
+		} catch(DecodeException e) {
+			
+			logger.error("DecodeException has occurred");
+			messageReturn.commonReturn(routingContext, MessageReturn.RC_DECODE_EXCEPTION_CODE, MessageReturn.RC_DECODE_EXCEPTION_REASON, isXML);
+	
+			
+		} catch(Exception e) {
+			
+			logger.error("Exception has occurred");
+			messageReturn.commonReturn(routingContext, MessageReturn.RC_EXCEPTION_CODE, MessageReturn.RC_EXCEPTION_REASON, isXML);
+	
+		}  
+
+	}
 	
 	private void selectQuery(RoutingContext routingContext) {
 
@@ -694,10 +784,11 @@ public class QueryRoute extends AbstractVerticle {
 		
 		try {
 
-			String id = routingContext.request().getParam(COL_ID);
+//			String id = routingContext.request().getParam(COL_ID);
 			JsonObject json = routingContext.getBodyAsJson();
+			String wcheck = routingContext.getBodyAsString();
 			json.put(ADDR, "deleteOneQueryManage");
-			json.put(COL_ID, id);
+//			json.put(COL_ID, id);
 			
 			boolean isValid = this.checkQureyMange(json.toString(), routingContext);
 
@@ -1212,13 +1303,88 @@ public class QueryRoute extends AbstractVerticle {
 		
 		try {
 			final String id = routingContext.request().getParam(COL_ID);
+			final String role = routingContext.request().getParam("role");
+			final String role_instance_id = routingContext.request().getParam("role_instance_id");
 			
 			// 올바른 정보 입력
 			if (!id.equals(null)) {
 				
-				JsonObject json = new JsonObject();
+				JsonObject json = new JsonObject();;
 				json.put(COL_ID, id);
-				json.put(ADDR, "getOneInstance");
+				json.put("role", role);
+				json.put("role_instance_id", role_instance_id);
+				json.put("address", "getOneInstance");
+				
+				logger.info("attempting to connect to vertx.instance verticle");
+
+				eb.request("vertx.instance", json.toString(), reply -> {
+					
+					// 요청 성공시
+					if (reply.succeeded()) {
+						
+						logger.info("vertx.instance success");
+						
+						String res = reply.result().body().toString();
+					
+						logger.info("Successfully returned data in json format");
+						routingContext.response().putHeader("content-type", "application/json; charset=utf-8")
+						.end(res);
+						
+						// 요청 실패시
+					} else {
+						
+						logger.error("failed executing inside vertx.queryManage");
+						messageReturn.commonReturn(routingContext, MessageReturn.RC_VERTICLE_FAIL_CODE, MessageReturn.RC_VERTICLE_FAIL_REASON, isXML);
+						
+					}
+				});
+				
+				// 아이디 입력하지 않았을 경우
+			} else {
+				
+				logger.error("wrong input value");
+				messageReturn.commonReturn(routingContext, MessageReturn.RC_WRONG_DATA_CODE, MessageReturn.RC_WRONG_DATA_REASON, isXML);
+				
+			}
+			
+		} catch(NullPointerException e) {
+			
+			logger.error("NullPointerException occurred");
+			messageReturn.commonReturn(routingContext, MessageReturn.RC_NULL_POINTER_EXCEPTION_CODE, MessageReturn.RC_NULL_POINTER_EXCEPTION_REASON, isXML);
+	
+		} catch(DecodeException e) {
+			
+			logger.error("DecodeException has occurred");
+			messageReturn.commonReturn(routingContext, MessageReturn.RC_DECODE_EXCEPTION_CODE, MessageReturn.RC_DECODE_EXCEPTION_REASON, isXML);
+	
+			
+		} catch(Exception e) {
+			
+			logger.error("Exception has occurred");
+			messageReturn.commonReturn(routingContext, MessageReturn.RC_EXCEPTION_CODE, MessageReturn.RC_EXCEPTION_REASON, isXML);
+	
+		} 
+		
+	}
+	
+	/**
+	 * Select one query data with specified id
+	 * 
+	 * @param routingContext
+	 */
+	private void getIDInstance(RoutingContext routingContext) {
+		
+		logger.info("Entered getIDInstance");
+		
+		try {
+			final String id = routingContext.request().getParam(COL_ID);
+			
+			// 올바른 정보 입력
+			if (!id.equals(null)) {
+				
+				JsonObject json = new JsonObject();;
+				json.put(COL_ID, id);
+				json.put("address", "getIDInstance");
 				
 				logger.info("attempting to connect to vertx.instance verticle");
 

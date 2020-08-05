@@ -3,6 +3,7 @@ package io.vertx.blog.first;
 import java.util.HashSet;
 import java.util.Set;
 
+import org.apache.commons.codec.binary.StringUtils;
 import org.apache.log4j.Logger;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
@@ -39,7 +40,6 @@ public class QueryWebVerticle extends AbstractVerticle {
 	public void start(Future<Void> fut) throws Exception {
 
 		logger.info("started QueryWebVerticle");
-		System.out.println("[QueryWebVerticle] started");
 
 		sharedData = vertx.sharedData();
 
@@ -80,6 +80,7 @@ public class QueryWebVerticle extends AbstractVerticle {
 		router.post("/queryInsert").handler(this::query_addOneQueryManage);
 		router.post("/queryUpdate").handler(this::update_updateOneQueryManage);
 		router.get("/headerData").handler(this::get_headerData);
+		router.post("/querySearch").handler(this::searchQueryManage);
 		
 		//property
 		router.get("/propertyfind").handler(this::find_getAllProperty);
@@ -95,6 +96,7 @@ public class QueryWebVerticle extends AbstractVerticle {
  		router.delete("/instanceDelete/*").handler(this::delete_deleteOneInstance);
 		router.post("/instanceInsert").handler(this::query_addOneInstance);
 		router.post("/instanceUpdate").handler(this::update_updateOneInstance);
+		
 
 		// Create the HTTP server and pass the "accept" method to the request handler.
 		vertx.createHttpServer().requestHandler(router::accept).listen(
@@ -140,8 +142,6 @@ public class QueryWebVerticle extends AbstractVerticle {
 
 				jsonObject.put("queryString", formatingJson);
 
-				// System.err.println("(1)" + jsonObject);
-
 				promise.complete();
 
 			} else {
@@ -173,7 +173,6 @@ public class QueryWebVerticle extends AbstractVerticle {
 
 		client.get(443, "spaceweather.rra.go.kr", "/api/kindex").ssl(true).send(ar -> {
 
-			// System.err.println("(2)" +jsonObject);
 			if (ar.succeeded()) {
 				
 				logger.info("response from get " + "spaceweather.rra.go.kr" + ":" + 443 + "/api/kindex === success" );
@@ -431,6 +430,88 @@ public class QueryWebVerticle extends AbstractVerticle {
 	 * 
 	 * @param routingContext
 	 */
+	private void searchQueryManage(RoutingContext routingContext) {
+
+		logger.info("entered searchQueryManage");
+
+		WebClient client = WebClient.create(vertx);
+
+		JsonObject json = routingContext.getBodyAsJson();
+		JsonObject sendJson = new JsonObject();
+		
+		String from = json.getString("from");
+		String queryString = json.getString("searchQueryString");
+		String descript = json.getString("searchDescript");
+		String sqlType = json.getString("searchSqlType");
+		String role = json.getString("searchRole");
+
+		
+		if("searchLike".equals(from)) {
+			
+			if(!"".equals(queryString)) {
+				
+				sendJson.put("queryString", queryString);
+			}
+			if(!"".equals(descript)) {
+				
+				sendJson.put("descript", descript);
+			}
+			
+		} else {
+			if(!"".equals(sqlType)) {
+				
+				sendJson.put("sqlType", sqlType);
+			}
+			if(!"".equals(role)) {
+				
+				sendJson.put("role", role);
+			}
+		}
+		
+		logger.info("requesting to post " + httpIP + ":" + port + "/queryManage");
+
+		client.post(port, httpIP, "/queryManage/search")
+				.sendJsonObject(sendJson, ar -> {
+					if (ar.succeeded()) {
+						
+						logger.info("response from post " + httpIP + ":" + port + "/queryManage/search === success" );
+
+						JSONParser parser = new JSONParser();
+						JSONObject jsonObject = new JSONObject();
+						JSONArray array = new JSONArray();
+						try {
+							array = (JSONArray) parser.parse(ar.result().bodyAsString());
+							//jsonObject = (JSONObject) parser.parse(ar.result().bodyAsString());
+							//JsonArray jsonArray = ar.result().bodyAsJsonArray();
+
+							routingContext.response().putHeader("Content-Type", "application/json;charset=UTF-8");
+							routingContext.response().end(array.toString());
+
+						} catch (ParseException e) {
+							// TODO Auto-generated catch block
+							e.printStackTrace();
+
+							routingContext.response().putHeader("Content-Type", "application/json;charset=UTF-8");
+							routingContext.response().end(new JsonObject().put("error", e.getMessage()).toString());
+
+						}
+
+					} else {
+						
+						logger.info("response from post " + httpIP + ":" + port + "/queryManage === fail" );
+
+						routingContext.response().putHeader("Content-Type", "application/json;charset=UTF-8");
+						routingContext.response().end(new JsonObject().put("error", ar.cause().getMessage()).encode());
+					}
+				});
+
+	}
+	
+	/**
+	 * 쿼리 등록
+	 * 
+	 * @param routingContext
+	 */
 	private void query_addOneQueryManage(RoutingContext routingContext) {
 
 		logger.info("entered query_addOneQueryManage");
@@ -502,7 +583,6 @@ public class QueryWebVerticle extends AbstractVerticle {
 				
 				logger.info("response from delete " + httpIP + ":" + port + "/queryManage/:id === success" );
 
-				System.out.println("success");
 				routingContext.response().end(ar.result().toString());
 
 			} else {
@@ -581,8 +661,6 @@ public class QueryWebVerticle extends AbstractVerticle {
 
 				if (ar.succeeded()) {
 					logger.info("response from put " + httpIP + ":" + port + "/property/:id === success" );
-
-					System.out.println("success");
 
 				} else {
 
@@ -717,7 +795,6 @@ public class QueryWebVerticle extends AbstractVerticle {
 				
 				logger.info("response from delete " + httpIP + ":" + port + "/property/:id === success" );
 
-				System.out.println("success");
 				routingContext.response().end(ar.result().toString());
 				
 			} else {
