@@ -180,11 +180,7 @@
 						</lifecycleMappingMetadata>
 					</configuration>
 				</plugin>
-			</plugins>
-		</pluginManagement>
-
-		<plugins>
-			<plugin>
+				<plugin>
 				<artifactId>maven-compiler-plugin</artifactId>
 				<version>3.3</version>
 				<configuration>
@@ -316,7 +312,8 @@
 					</execution>
 				</executions>
 			</plugin>
-		</plugins>
+			</plugins>			
+		</pluginManagement>
 	</build>
 
 	<profiles>
