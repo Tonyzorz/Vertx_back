@@ -63,7 +63,7 @@ public class QueryManage extends AbstractVerticle {
 	private static String QUERY_STRING = null;
 	private static String ROLE = null;
 			
-	private static final String COL_ID = "qId";
+	private static final String COL_ID = "queryId";
 	private static final String COL_QSTR = "queryString";
 	private static final String COL_DESC = "descript";
 	private static final String COL_SQLT = "sqlType";
@@ -120,7 +120,6 @@ public class QueryManage extends AbstractVerticle {
 		configurationTable.setAutoSave(true);
 		
 		TABLE_NAME = String.valueOf(configurationTable.getProperty("table.name"));
-		QUERY_STRING = String.valueOf(configurationTable.getProperty("table.column1"));
 		
 		
 		if (configurationMessage == null || configurationTable == null) {
@@ -269,7 +268,7 @@ public class QueryManage extends AbstractVerticle {
 				logger.error(e);
 			}
 
-			String address = json.get("address").toString();
+			String address = json.get(ADDR).toString();
 
 			if (address.equals("getOneQueryManage")) {
 
@@ -313,7 +312,7 @@ public class QueryManage extends AbstractVerticle {
 				e.printStackTrace();
 			}
 
-			String address = json.get("address").toString();
+			String address = json.get(ADDR).toString();
 
 			if (address.equals("sharedDataQueryUpdateAll")) {
 
@@ -587,14 +586,14 @@ public class QueryManage extends AbstractVerticle {
 								String tempId = String.valueOf(tempPlace.getValue(COL_ID));
 								tempPlace.remove(COL_ID);
 								
-								String beforeConverted = tempPlace.getValue(QUERY_STRING).toString();
+								String beforeConverted = tempPlace.getValue(COL_QSTR).toString();
 								String afterConverted = AES256Util.AES_Decode(beforeConverted);
 								
-								tempPlace.put(QUERY_STRING, afterConverted);
+								tempPlace.put(COL_QSTR, afterConverted);
 								
 								toSharedData.put(tempId, tempPlace);
 
-								resultList.get(i).put(QUERY_STRING, afterConverted);
+								resultList.get(i).put(COL_QSTR, afterConverted);
 
 							} catch (InvalidKeyException e) {
 								// TODO Auto-generated catch block
@@ -617,9 +616,9 @@ public class QueryManage extends AbstractVerticle {
 								JsonObject tempPlace = new JsonObject(resultList.get(i).toString());
 								
 								String tempId = String.valueOf(tempPlace.getValue(COL_ID));
-								String beforeConverted = tempPlace.getValue(QUERY_STRING).toString();
+								String beforeConverted = tempPlace.getValue(COL_QSTR).toString();
 								
-								tempPlace.put(QUERY_STRING, beforeConverted);
+								tempPlace.put(COL_QSTR, beforeConverted);
 
 								toSharedData.put(tempId, tempPlace);
 
@@ -706,7 +705,7 @@ public class QueryManage extends AbstractVerticle {
 			jdbc.getConnection(ar -> {
 				SQLConnection connection = ar.result();
 
-				String queryFinalString = "DELETE FROM " + TABLE_NAME +" WHERE "+ COL_ID +" ='" + id + "' AND "+ COL_ROLE + "= '" + ROLE + "'";
+				String queryFinalString = "DELETE FROM " + TABLE_NAME +" WHERE "+ COL_ID +" ='" + id + "'";
 				
 				queryConnectionAll(queryFinalString, connection, message);
 				
@@ -735,7 +734,7 @@ public class QueryManage extends AbstractVerticle {
 
 			JSONObject parsedBodyData = (JSONObject) parser.parse(bodyDataBeforeParsing);
 			String id = parsedBodyData.get(COL_ID).toString();
-			String queryString = parsedBodyData.get(QUERY_STRING).toString();
+			String queryString = parsedBodyData.get(COL_QSTR).toString();
 			String desc = parsedBodyData.get(COL_DESC).toString();
 			String sqlType = parsedBodyData.get(COL_SQLT).toString().toLowerCase();
 			 
@@ -748,7 +747,7 @@ public class QueryManage extends AbstractVerticle {
 					
 					String queryFinalString = "UPDATE "+ TABLE_NAME
 					+ " SET "+ COL_ID +"='" + id + "', " 
-					+ QUERY_STRING + "= '" + encodedValue + "', " 
+					+ COL_QSTR + "= '" + encodedValue + "', " 
 					+ COL_DESC + " = '" + desc + "', " 
 					+ COL_SQLT + " = '" + sqlType + "' " 
 					+ "WHERE "+ COL_ID + " = '"+ id +"' AND " + COL_ROLE + " = '" + ROLE + "'";
@@ -808,7 +807,7 @@ public class QueryManage extends AbstractVerticle {
 			JSONObject resultList = (JSONObject) parser.parse(message.body().toString());
 			
 			try {
-				String queryString = resultList.get(QUERY_STRING).toString();
+				String queryString = resultList.get(COL_QSTR).toString();
 				String encodedValue = AES256Util.AES_Encode(queryString);
 				String id = resultList.get(COL_ID).toString();
 				String desc = resultList.get(COL_DESC).toString();
@@ -819,7 +818,7 @@ public class QueryManage extends AbstractVerticle {
 
 					SQLConnection connection = ar.result();
 					
-					String queryFinalString = "INSERT INTO "+TABLE_NAME+" ("+ COL_ID + ", "+QUERY_STRING+", " + COL_DESC + ", " + COL_SQLT + ", "+COL_ROLE +" ) VALUES ('"+id+"', '"
+					String queryFinalString = "INSERT INTO "+TABLE_NAME+" ("+ COL_ID + ", "+COL_QSTR+", " + COL_DESC + ", " + COL_SQLT + ", "+COL_ROLE +" ) VALUES ('"+id+"', '"
 							+encodedValue+"', '"+desc+"', '"+sqlType+"', '"+role+"')";
 					
 					//System.out.println("queryFinalString : " + queryFinalString);
@@ -871,7 +870,7 @@ public class QueryManage extends AbstractVerticle {
 
 			SQLConnection connection = ar.result();
 
-			String queryFinalString = "SELECT * FROM "+TABLE_NAME+" WHERE " + COL_ROLE + " = '"+ROLE+"'";
+			String queryFinalString = "SELECT * FROM "+TABLE_NAME;
 
 			queryConnectionAll(queryFinalString, connection, message);
 
@@ -892,7 +891,7 @@ public class QueryManage extends AbstractVerticle {
 
 				SQLConnection connection = ar.result();
 
-				String queryFinalString = "SELECT * FROM "+TABLE_NAME+" WHERE "+ COL_ID + "= '" + json.get(COL_ID).toString() + "' AND " + COL_ROLE + "= '"+ROLE+"'";
+				String queryFinalString = "SELECT * FROM "+TABLE_NAME+" WHERE "+ COL_ID + "= '" + json.get(COL_ID).toString() + "'";
 
 				queryConnectionAll(queryFinalString, connection, message);
 

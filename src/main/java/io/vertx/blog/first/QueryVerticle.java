@@ -51,8 +51,8 @@ public class QueryVerticle extends AbstractVerticle {
 	private static String TABLE_COLUMN1 = null;
 	
 	private QueryMessage messageReturn;
-
-	private static final String COL_ID = "query_id";
+	
+	private static final String COL_ID = "queryId";
 	private static final String ASYNCMAP_NAME = "mysql";
 	/**
 	 * This method is called when the verticle is deployed. It creates a HTTP server

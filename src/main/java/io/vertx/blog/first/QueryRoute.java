@@ -85,7 +85,7 @@ public class QueryRoute extends AbstractVerticle {
 	private static final String CLASSPATH_FILE = "router.properties";
 	private static final String CLASSPATH_FILE_MESSAGE = "message.properties";
 	
-	private static final String COL_ID = "qId";
+	private static final String COL_ID = "queryId";
 	private static final String COL_QSTR = "queryString";
 	private static final String COL_DESC = "descript";
 	private static final String COL_SQLT = "sqlType";
@@ -754,7 +754,7 @@ public class QueryRoute extends AbstractVerticle {
 		logger.info("Entered getOneQueryManage");
 		
 		try {
-			final String id = routingContext.request().getParam("id");
+			final String id = routingContext.request().getParam(COL_ID);
 	
 			// 올바른 정보 입력
 			if (!id.equals(null)) {
