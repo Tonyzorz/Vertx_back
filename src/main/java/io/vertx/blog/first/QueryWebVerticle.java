@@ -34,11 +34,12 @@ public class QueryWebVerticle extends AbstractVerticle {
 	private SharedData sharedData;
 	private WebClient webClient;
 	
-	private static final String COL_ID = "qId";
+	private static final String COL_ID = "queryId";
 	private static final String COL_QSTR = "queryString";
 	private static final String COL_DESC = "descript";
 	private static final String COL_SQLT = "sqlType";
 	private static final String ADDR = "address";
+	private static final String COL_ROLE = "role";
 
 	private int port;
 	private String httpIP;
@@ -81,8 +82,8 @@ public class QueryWebVerticle extends AbstractVerticle {
 		
 		//queryManage
 		router.get("/find").handler(this::find_getAllQueryManage);
-		router.get("/find/:id").handler(this::find_getOneQueryManage);
-		router.delete("/delete/:id").handler(this::delete_deleteOneQueryManage);
+		router.get("/find/:queryId").handler(this::find_getOneQueryManage);
+		router.delete("/delete/:queryId").handler(this::delete_deleteOneQueryManage);
 		router.post("/queryInsert").handler(this::query_addOneQueryManage);
 		router.post("/queryUpdate").handler(this::update_updateOneQueryManage);
 		router.get("/headerData").handler(this::get_headerData);
@@ -406,15 +407,15 @@ public class QueryWebVerticle extends AbstractVerticle {
 
 		WebClient client = WebClient.create(vertx);
 
-		String id = routingContext.request().getParam("id");
+		String queryId = routingContext.request().getParam("queryId");
 		
-		logger.info("requesting to get " + httpIP + ":" + port + "/queryManage/:id");
+		logger.info("requesting to get " + httpIP + ":" + port + "/queryManage/:queryId");
 
-		client.get(port, httpIP, "/queryManage/" + id).send(ar -> {
+		client.get(port, httpIP, "/queryManage/" + queryId).send(ar -> {
 
 			if (ar.succeeded()) {
 				
-				logger.info("response from get " + httpIP + ":" + port + "/queryManage/:id === success" );
+				logger.info("response from get " + httpIP + ":" + port + "/queryManage/:queryId === success" );
 
 				JsonArray jsonArray = ar.result().bodyAsJsonArray();
 
@@ -423,7 +424,7 @@ public class QueryWebVerticle extends AbstractVerticle {
 
 			} else {
 				
-				logger.info("response from get " + httpIP + ":" + port + "/queryManage/:id === fail" );
+				logger.info("response from get " + httpIP + ":" + port + "/queryManage/:queryId === fail" );
 
 				routingContext.response().putHeader("Content-Type", "application/json;charset=UTF-8");
 				routingContext.response().end(new JsonObject().put("error", ar.cause().getMessage()).encode());
@@ -571,23 +572,23 @@ public class QueryWebVerticle extends AbstractVerticle {
 
 		WebClient client = WebClient.create(vertx);
 
-		String id = routingContext.request().getParam(COL_ID);
+		String queryId = routingContext.request().getParam(COL_ID);
 		
 		JsonObject json = new JsonObject(routingContext.getBodyAsString());
 		
-		logger.info("requesting to delete " + httpIP + ":" + port + "/queryManage/:id");
+		logger.info("requesting to delete " + httpIP + ":" + port + "/queryManage/:queryId");
 
-		client.delete(port, httpIP, "/queryManage/" + id).sendJsonObject(json, ar -> {
+		client.delete(port, httpIP, "/queryManage/" + queryId).sendJsonObject(json, ar -> {
 
 			if (ar.succeeded()) {
 				
-				logger.info("response from delete " + httpIP + ":" + port + "/queryManage/:id === success" );
+				logger.info("response from delete " + httpIP + ":" + port + "/queryManage/:queryId === success" );
 
 				routingContext.response().end(ar.result().toString());
 
 			} else {
 				
-				logger.info("response from delete " + httpIP + ":" + port + "/queryManage === fail/:id" );
+				logger.info("response from delete " + httpIP + ":" + port + "/queryManage === fail/:queryId" );
 
 				routingContext.response().putHeader("Content-Type", "application/json;charset=UTF-8");
 				routingContext.response().end(new JsonObject().put("error", ar.cause().getMessage()).encode());
