@@ -1,7 +1,0 @@
-{
-  "http.port": ${http.port},
-  "url": "jdbc:mariadb://192.168.11.6:3307/test",
-  "driver_class": "org.mariadb.jdbc.Driver",
-  "user": "root",
-  "password": "root"
-}
