@@ -230,6 +230,19 @@ public class QueryRoute extends AbstractVerticle {
 		router.get(queryUpdate_id).handler(this::queryUpdate);
 		router.get(queryUpdate).handler(this::queryUpdate);
 		
+		String scs_address =  "/scs/:address";
+		
+		router.post(scs_address).handler(this::selectSCS); // query router
+		router.get(scs_address).handler(this::selectSCS);
+		router.delete(scs_address).handler(this::selectSCS);
+		router.put(scs_address).handler(this::selectSCS);
+		router.patch(scs_address).handler(this::selectSCS);
+		
+		/**
+		 * scs manage
+		 */
+		router.post("/retrieve_station_list").handler(this::retrieve_station_list);
+		
 		// Create the HTTP server and pass the "accept" method to the request handler.
 		vertx.createHttpServer().requestHandler(router::accept).listen(
 				// Retrieve the port from the configuration,
@@ -1760,7 +1773,14 @@ public class QueryRoute extends AbstractVerticle {
 			
 			for (Object key : jsonObject.keySet()) {
 				
-				if(!validUtil.isSqlSpecialCharacters(jsonObject.get(key).toString())) {
+//				if(!validUtil.isSqlSpecialCharacters(jsonObject.get(key).toString())) {
+//					return false;
+//				}
+				
+				String value = jsonObject.get(key).toString();
+				
+				//스테이션 등록시 jsonObject.get(key)가 없을 경우 , ex. value = "", DecodeException 발생
+				if(!"".equals(value) && !validUtil.isSqlSpecialCharacters(value)) {
 					return false;
 				}
 			}
@@ -1901,5 +1921,229 @@ public class QueryRoute extends AbstractVerticle {
 		
 	}
 	
+	private void retrieve_station_list(RoutingContext routingContext) {
+		
+		logger.info("Entered retrieve_station_list");
+		
+		try {
+
+			JsonObject json = routingContext.getBodyAsJson();
+		
+			logger.info("attempting to connect to vertx.scs verticle");
+
+			eb.request("vertx.scs", json.toString(), reply -> {
+		
+				// queryManage Verticle 요청 성공시
+				if (reply.succeeded()) {
+					
+					logger.info("vertx.queryManage success");
+					
+					String res = reply.result().body().toString();
+				
+					logger.info("Successfully returned data in json format");
+					routingContext.response().putHeader("content-type", "application/json; charset=utf-8")
+					.end(res);
+		
+					// 요청 실패시
+				} else {
+		
+					logger.error("failed executing inside vertx.queryManage");
+					messageReturn.commonReturn(routingContext, MessageReturn.RC_VERTICLE_FAIL_CODE, MessageReturn.RC_VERTICLE_FAIL_REASON, isXML);
+				}
+			});
+		
+		} catch(NullPointerException e) {
+			
+			logger.error("NullPointerException occurred");
+			messageReturn.commonReturn(routingContext, MessageReturn.RC_NULL_POINTER_EXCEPTION_CODE, MessageReturn.RC_NULL_POINTER_EXCEPTION_REASON, isXML);
 	
+		} catch(DecodeException e) {
+			
+			logger.error("DecodeException has occurred");
+			messageReturn.commonReturn(routingContext, MessageReturn.RC_DECODE_EXCEPTION_CODE, MessageReturn.RC_DECODE_EXCEPTION_REASON, isXML);
+	
+			
+		} catch(Exception e) {
+			
+			logger.error("Exception has occurred");
+			messageReturn.commonReturn(routingContext, MessageReturn.RC_EXCEPTION_CODE, MessageReturn.RC_EXCEPTION_REASON, isXML);
+	
+		}  
+		
+	}
+
+	private void selectSCS(RoutingContext routingContext) {
+		
+		logger.info("entered selectSCS");
+		
+		try {
+			
+			String test = routingContext.getBody().toString();
+			JsonObject json;
+			
+			if("".equals(test)) {
+				
+				json = new JsonObject();
+				
+			} else {
+				
+				json = new JsonObject(routingContext.getBody().toString());
+			}
+			
+			xmlCheck(routingContext);
+			
+			// query 번호 받기
+			String idString = routingContext.request().getParam(ADDR);
+			
+			// body에 값이 있을때 validation vertx 실행
+			if (!json.isEmpty()) {
+				
+				boolean validationValid = this.checkSql(json.toString());
+				
+				// validation 문제 없을시 참
+				if (validationValid) {
+					
+					// 쿼리 id json에 저장
+					json.put(ADDR, idString);
+					
+					// query verticle
+					logger.info("attempting to connect to vertx.query verticle");
+					
+					eb.request("vertx.scs", json.toString(), result -> {
+						
+						logger.info("finished connection with vertx.query verticle");
+						
+						if (result.succeeded()) {
+							
+							String res = result.result().body().toString();
+							
+							// data를 xml로 리턴
+							if (isXML) {
+								
+								logger.info("About to convert json to xml");
+								
+								res = res.replaceAll("[<]", "<![CDATA[");
+								res = res.replaceAll("[>]", "]]>");
+								
+								XmlConvert xmlConvert = XmlConvert.xmlConvert(res);
+								boolean success = xmlConvert.isSuccess();
+								String xmlResult = xmlConvert.getXmlResult();
+								
+								if(success) {
+									
+									logger.info("Successfully converted json to xml");
+									routingContext.response().putHeader("content-type", "application/xml; charset=utf-8")
+									.end(xmlResult);
+									
+								} else {
+									
+									logger.error("Failed converting json to xml or is not in xml converting format");
+									routingContext.response().putHeader("content-type", "application/json; charset=utf-8")
+									.end(res);
+									
+								}
+								
+								// json으로 리턴
+							} else {
+								
+								logger.info("Successfully returned data in json format");
+								routingContext.response().putHeader("content-type", "application/json; charset=utf-8")
+								.end(res);
+							}
+							
+						} else {
+							
+							logger.error("failed executing inside vertx.query");
+							messageReturn.commonReturn(routingContext, MessageReturn.RC_VERTICLE_FAIL_CODE, MessageReturn.RC_VERTICLE_FAIL_REASON, isXML);
+						}
+					});
+					
+					// validation verticle통해 결과가 false, body에 문제가 있다
+				} else {
+					
+					logger.warn("Validation problem occurred");
+					messageReturn.commonReturn(routingContext, MessageReturn.VC_PROBLEM_CODE, MessageReturn.VC_PROBLEM_REASON, isXML);
+					
+				}
+				
+				// body가 없으니 validation vertx실행안하고 바로 vertx.query를 실행한다
+			} else {
+				
+				// eventbus를 통해 verticle에 보낼 json data
+				JsonObject jsons = new JsonObject();
+				jsons.put(ADDR, idString);
+				
+				// query verticle
+				logger.info("attempting to connect to vertx.query verticle");
+				
+				eb.request("vertx.query", jsons.toString(), result -> {
+					
+					logger.info("finished connection with vertx.query verticle");
+					
+					if (result.succeeded()) {
+						
+						String res = result.result().body().toString();
+						
+						// data를 xml로 리턴
+						if (isXML) {
+							
+							logger.info("About to convert json to xml");
+							
+							res = res.replaceAll("[<]", "<![CDATA[");
+							res = res.replaceAll("[>]", "]]>");
+							
+							XmlConvert xmlConvert = XmlConvert.xmlConvert(res);
+							boolean success = xmlConvert.isSuccess();
+							String xmlResult = xmlConvert.getXmlResult();
+							
+							if(success) {
+								
+								logger.info("Successfully converted json to xml");
+								routingContext.response().putHeader("content-type", "application/xml; charset=utf-8")
+								.end(xmlResult);
+								
+							} else {
+								
+								logger.error("Failed converting json to xml or is not in xml converting format");
+								routingContext.response().putHeader("content-type", "application/json; charset=utf-8")
+								.end(res);
+								
+							}
+							
+							// json으로 리턴
+						} else {
+							
+							logger.info("Successfully returned data in json format");
+							routingContext.response().putHeader("content-type", "application/json; charset=utf-8")
+							.end(res);
+						}
+					} else {
+						
+						logger.error("failed executing inside vertx.query");
+						messageReturn.commonReturn(routingContext, MessageReturn.RC_VERTICLE_FAIL_CODE, MessageReturn.RC_VERTICLE_FAIL_REASON, isXML);
+						
+					}
+					
+				});
+			}
+			
+		} catch(NullPointerException e) {
+			
+			logger.error("NullPointerException occurred");
+			messageReturn.commonReturn(routingContext, MessageReturn.RC_NULL_POINTER_EXCEPTION_CODE, MessageReturn.RC_NULL_POINTER_EXCEPTION_REASON, isXML);
+			
+		} catch(DecodeException e) {
+			
+			logger.error("DecodeException has occurred");
+			messageReturn.commonReturn(routingContext, MessageReturn.RC_DECODE_EXCEPTION_CODE, MessageReturn.RC_DECODE_EXCEPTION_REASON, isXML);
+			
+			
+		} catch(Exception e) {
+			
+			logger.error("Exception has occurred");
+			messageReturn.commonReturn(routingContext, MessageReturn.RC_EXCEPTION_CODE, MessageReturn.RC_EXCEPTION_REASON, isXML);
+			
+		}
+		
+	}
 }
