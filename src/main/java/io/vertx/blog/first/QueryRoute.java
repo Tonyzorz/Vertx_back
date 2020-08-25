@@ -2,7 +2,6 @@ package io.vertx.blog.first;
 
 import java.util.ArrayList;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -15,6 +14,7 @@ import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
 import org.json.simple.parser.ParseException;
 
+import io.vertx.common.Pagination;
 import io.vertx.common.ValidationUtil;
 import io.vertx.common.XmlConvert;
 import io.vertx.common.message.MessageReturn;
@@ -24,6 +24,7 @@ import io.vertx.core.AbstractVerticle;
 import io.vertx.core.AsyncResult;
 import io.vertx.core.Future;
 import io.vertx.core.Handler;
+import io.vertx.core.Promise;
 import io.vertx.core.VertxOptions;
 import io.vertx.core.eventbus.EventBus;
 import io.vertx.core.eventbus.Message;
@@ -31,6 +32,7 @@ import io.vertx.core.http.HttpMethod;
 import io.vertx.core.http.HttpServer;
 import io.vertx.core.http.HttpServerResponse;
 import io.vertx.core.json.DecodeException;
+import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import io.vertx.core.shareddata.SharedData;
 import io.vertx.core.spi.cluster.ClusterManager;
@@ -64,8 +66,8 @@ public class QueryRoute extends AbstractVerticle {
 	private ValidationUtil validUtil;
 
 	private PropertiesConfiguration configuration = null;
-	JsonObject jsonz = new JsonObject();
-	
+	JsonObject futureJson = new JsonObject();
+
 	boolean isXML = false;
 
 	/**
@@ -92,9 +94,13 @@ public class QueryRoute extends AbstractVerticle {
 	private static final String COL_ROLE = "role";
 	private static final String ADDR = "address";
 	
+	private static final String S_ID = "service_id";
+
 	private RouterMessage messageReturn;
 	private QueryMessage eventBusReturn;
 	
+	Pagination pagination = new Pagination();
+
 	@Override
 	public void start(Future<Void> fut) throws ConfigurationException {
 
@@ -188,11 +194,13 @@ public class QueryRoute extends AbstractVerticle {
 		
 		router.route(queryManage_id).method(HttpMethod.PATCH).method(HttpMethod.PUT)
 				.handler(this::updateOneQueryManage);
-		router.delete(queryManage_id).handler(this::deleteOneQueryManage);
+		router.delete("/queryManage/*").handler(this::deleteOneQueryManage);
 		
-		router.post("/queryManage/search").handler(this::searchQueryManage);
+		//router.post("/queryManage/search").handler(this::searchQueryManage);
+		router.post("/queryManage/search").handler(this::searchQueryManageTotal);
 		router.post(queryManage).handler(this::addOneQueryManage);
-		router.post(queryManage).handler(this::addOneQueryManage);
+		
+		router.post(queryManage + "/paging*").handler(this::searchQueryManageTotal);
 		
 		/**
 		 * property manage
@@ -243,6 +251,23 @@ public class QueryRoute extends AbstractVerticle {
 		 */
 		router.post("/retrieve_station_list").handler(this::retrieve_station_list);
 		
+		/**
+		 * managing query database routing
+		 */
+		String service_id = "/service/:service_id";
+		String service = "/service";
+
+		router.get(service).handler(this::getAllService);
+		router.get(service_id).handler(this::getOneService);
+		router.post(service).handler(this::addOneService);
+		
+		router.route(service_id).method(HttpMethod.PATCH).method(HttpMethod.PUT)
+				.handler(this::updateOneService);
+		router.delete(service_id).handler(this::deleteOneService);
+		
+//		router.post("/queryManage/search").handler(this::searchQueryManage);
+//		router.post(service).handler(this::addOneQueryManage);
+
 		// Create the HTTP server and pass the "accept" method to the request handler.
 		vertx.createHttpServer().requestHandler(router::accept).listen(
 				// Retrieve the port from the configuration,
@@ -331,44 +356,167 @@ public class QueryRoute extends AbstractVerticle {
 
 	}
 
+	private void searchQueryManageTotal(RoutingContext routingContext) {
+		
+		logger.info("Entered getAllQueryManagePaging");
+		try {
+			
+			futureJson = new JsonObject(routingContext.getBodyAsString());
+			
+			if(!"".equals(futureJson.getValue("role")) || !"".equals(futureJson.getValue("sqlType")) ||
+					!"".equals(futureJson.getValue("descript")) || !"".equals(futureJson.getValue("queryString")) ||
+					!"".equals(futureJson.getValue("queryId"))) {
+				futureJson.put("search", true);
+			}
+			
+			System.out.println("body from querywebverticle is :::: " + futureJson);
+			
+			getAllQueryManageCount(routingContext).compose(arz -> {
+				
+				try {
+					System.out.println(futureJson);
+				
+					int totalCnt = Integer.valueOf(futureJson.getString("count"));
+					int page = Integer.valueOf(routingContext.request().getParam("page"));
+					int range = Integer.valueOf(routingContext.request().getParam("range"));
+					int listSize = Integer.valueOf(routingContext.request().getParam("listSize"));
+					
+					if(totalCnt == 0) {
+						System.out.println("searched coutn is 0 ");
+						Promise<JSONObject> promise = Promise.promise();
+
+						JsonObject json = new JsonObject();
+						json.put("queryString", false);
+						
+						routingContext.response().putHeader("Content-Type", "application/json;charset=UTF-8");
+						routingContext.response().end(json.toString());
+						return promise.future();
+
+					} else {
+						
+						pagination.setListSize(listSize);
+						pagination.pageInfo(page, range, totalCnt);
+						System.err.println("pagination info after couting === " + pagination.toString());
+						return searchQueryManage(routingContext);
+
+					}
+					
+				} catch(NumberFormatException e) {
+					
+					Promise<JSONObject> promise = Promise.promise();
+
+					JsonObject json = new JsonObject();
+					json.put("queryString", false);
+					
+					routingContext.response().putHeader("Content-Type", "application/json;charset=UTF-8");
+					routingContext.response().end(json.toString());
+					
+					return promise.future();
+				}
+//				return getAllQueryManagePage(routingContext);
+
+			}).compose(ar -> {
+				
+				Promise<JsonObject> promise = Promise.promise();
+				
+				routingContext.response().putHeader("Content-Type", "application/json;charset=UTF-8");
+				routingContext.response().end(ar.toString());
+				
+				return promise.future();
+			});
+			
+		} catch(NullPointerException e) {
+			
+			logger.error("NullPointerException occurred");
+			messageReturn.commonReturn(routingContext, MessageReturn.RC_NULL_POINTER_EXCEPTION_CODE, MessageReturn.RC_NULL_POINTER_EXCEPTION_REASON, isXML);
+	
+		} catch(DecodeException e) {
+			
+			logger.error("DecodeException has occurred");
+			messageReturn.commonReturn(routingContext, MessageReturn.RC_DECODE_EXCEPTION_CODE, MessageReturn.RC_DECODE_EXCEPTION_REASON, isXML);
+	
+			
+		} catch(Exception e) {
+			
+			logger.error("Exception has occurred");
+			messageReturn.commonReturn(routingContext, MessageReturn.RC_EXCEPTION_CODE, MessageReturn.RC_EXCEPTION_REASON, isXML);
+	
+		}  
+		
+	}
+	
 	/**
 	 * Select one query data with specified id
 	 * 
 	 * @param routingContext
 	 */
-	private void searchQueryManage(RoutingContext routingContext) {
+	private Future<JSONObject> searchQueryManage(RoutingContext routingContext) {
 
 		logger.info("Entered searchQueryManage");
-		
+		Promise<JSONObject> promise = Promise.promise();
+
 		try {
 			
 			JSONObject json = new JSONObject();
 			JSONParser parser = new JSONParser();
-			json = (JSONObject) parser.parse(routingContext.getBodyAsString());
 			
-			if(json.containsKey(COL_ROLE) || json.containsKey(COL_SQLT)) {
+			System.err.println(routingContext.getBody());
+			boolean isEmpty = (1 > (routingContext.getBody().length())) ? true : false;
+			System.out.println("is it empty  " +  isEmpty);
+			if(!isEmpty) {
+				json = (JSONObject) parser.parse(routingContext.getBodyAsString());
 				
-				json.put(ADDR, "searchEqualQueryManage");
-			
-				if("".equals(json.get(COL_ROLE))) {
-					json.remove(COL_ROLE);
-				}
-				
-				if("".equals(json.get(COL_SQLT))) {
-					json.remove(COL_SQLT);
-				}
-			} else {
-				
-				json.put(ADDR, "searchLikeQueryManage");
-				
-				if("".equals(json.get(COL_QSTR))) {
-					json.remove(COL_QSTR);
-				}
-				
-				if("".equals(json.get(COL_DESC))) {
-					json.remove(COL_DESC);
-				}
 			}
+			json.put(ADDR, "getAllQueryManagePage");
+			json.put("search", true);
+
+			
+			System.out.println("body from querywebverticle is :::: " + json);
+
+//			String roleValue = json.get(COL_ROLE).toString();
+//			String sqlTypeValue = json.get(COL_SQLT).toString();
+//			
+//			if(!"".equals(roleValue) || !"".equals(sqlTypeValue)) {
+//				
+//				json.put(ADDR, "searchEqualQueryManage");
+//			
+//				if("".equals(json.get(COL_ROLE))) {
+//					json.remove(COL_ROLE);
+//				}
+//				
+//				if("".equals(json.get(COL_SQLT))) {
+//					json.remove(COL_SQLT);
+//				}
+//			} else {
+//				
+//				json.put(ADDR, "searchLikeQueryManage");
+//				
+//				if("".equals(json.get(COL_QSTR))) {
+//					json.remove(COL_QSTR);
+//				}
+//				
+//				if("".equals(json.get(COL_DESC))) {
+//					json.remove(COL_DESC);
+//				}
+//			}
+			
+			
+			int listSize = Integer.valueOf(routingContext.request().getParam("listSize"));
+			int startList = pagination.getStartList();
+			
+			json.put("startList", startList);
+			json.put("listSize", listSize);
+			
+			
+			System.err.println("startList =" + startList);
+			System.err.println("listSize = " + listSize);
+			System.err.println("pagination info = "+ pagination.toString());
+			
+			
+			
+			System.out.println("getAllQueryManagePage =========== " + json);
+			logger.info("attempting to connect to vertx.queryManage verticle");
+			
 			
 			System.out.println("final json " + json);
 			
@@ -380,12 +528,19 @@ public class QueryRoute extends AbstractVerticle {
 				if (reply.succeeded()) {
 					
 					logger.info("vertx.queryManage success");
+					
 					String res = reply.result().body().toString();
+					JsonArray arr = new JsonArray(res);
 
+					System.out.println( "getallquerymanagepage result          " + arr);
 					logger.info("Successfully returned data in json format");
-					routingContext.response().putHeader("content-type", "application/json; charset=utf-8")
-					.end(res);
-
+					
+					System.out.println("pagination before sending data == " + pagination.toString() );
+					JSONObject result = new JSONObject();
+					result.put("queryString", arr);
+					result.put("pagination", pagination.toString());
+					
+					promise.complete(result);
 					// 요청 실패시
 				} else {
 
@@ -412,6 +567,8 @@ public class QueryRoute extends AbstractVerticle {
 			messageReturn.commonReturn(routingContext, MessageReturn.RC_EXCEPTION_CODE, MessageReturn.RC_EXCEPTION_REASON, isXML);
 	
 		}  
+		
+		return promise.future();
 
 	}
 	
@@ -911,12 +1068,16 @@ public class QueryRoute extends AbstractVerticle {
 
 //			String id = routingContext.request().getParam(COL_ID);
 			JsonObject json = routingContext.getBodyAsJson();
-			String wcheck = routingContext.getBodyAsString();
+//			String queryId = routingContext.request().getParam(COL_ID);
+//			String listSize = routingContext.request().getParam("listSize");
+//			String listCnt = routingContext.request().getParam("listCnt");
+//			String range = routingContext.request().getParam("range");
+//			String page = routingContext.request().getParam("page");
 			json.put(ADDR, "deleteOneQueryManage");
 //			json.put(COL_ID, id);
 			
 			boolean isValid = this.checkQureyMange(json.toString(), routingContext);
-
+			
 			// 올바른 정보 입력
 			if (isValid) {
 				
@@ -928,12 +1089,47 @@ public class QueryRoute extends AbstractVerticle {
 					if (reply.succeeded()) {
 						
 						logger.info("vertx.queryManage success");
-						String res = reply.result().body().toString();
+						//String res = reply.result().body().toString();
+						
 
-						logger.info("Successfully returned data in json format");
-						routingContext.response().putHeader("content-type", "application/json; charset=utf-8")
-						.end(res);
-		
+						int listCnt = Integer.valueOf(json.getValue("listCnt").toString()) - 1;
+						int listSize = Integer.valueOf(json.getValue("listSize").toString());
+						int page = Integer.valueOf(json.getValue("page").toString());
+						int range = Integer.valueOf(json.getValue("range").toString());
+						int pageCnt;
+						
+						
+						pagination.setListSize(listSize);
+						pagination.pageInfo(page, range, listCnt);
+						
+						JsonObject res = new JsonObject();
+						res.put("pagination", pagination.toString());
+						
+						if(listCnt % listSize == 0) {
+							pageCnt = listCnt/listSize;
+							pagination.setPageCnt(listSize);
+							res.put("pagination", pagination.toString());
+
+							if(pageCnt == 0) {
+								JsonObject jsons = new JsonObject();
+								json.put("queryString", false);
+								
+								routingContext.response().putHeader("Content-Type", "application/json;charset=UTF-8");
+								routingContext.response().end(jsons.toString());
+							}
+							
+							logger.info("Successfully returned data in json format");
+							routingContext.response().putHeader("content-type", "application/json; charset=utf-8")
+							.end(res.toString());
+							
+						} else {
+						
+							logger.info("Successfully returned data in json format");
+							routingContext.response().putHeader("content-type", "application/json; charset=utf-8")
+							.end(res.toString());
+						}
+						
+						
 						// query verticle와 연결 실패시
 					} else {
 		
@@ -979,7 +1175,7 @@ public class QueryRoute extends AbstractVerticle {
 		logger.info("Entered getAllQueryManage");
 		
 		try {
-
+			
 			JsonObject json = new JsonObject();
 			json.put(ADDR, "getAllQueryManage");
 		
@@ -1026,6 +1222,176 @@ public class QueryRoute extends AbstractVerticle {
 		
 	}
 	
+	private void getAllQueryManagePaging(RoutingContext routingContext) {
+	
+		logger.info("Entered getAllQueryManagePaging");
+
+		futureJson = new JsonObject();
+		getAllQueryManageCount(routingContext).compose(arz -> {
+			
+			System.out.println(futureJson);
+
+			int totalCnt = Integer.valueOf(futureJson.getString("count"));
+			int page = Integer.valueOf(routingContext.request().getParam("page"));
+			int range = Integer.valueOf(routingContext.request().getParam("range"));
+			int listSize = Integer.valueOf(routingContext.request().getParam("listSize"));
+			pagination.setListSize(listSize);
+			
+			pagination.pageInfo(page, range, totalCnt);
+
+			if(totalCnt == 0) {
+				
+
+				JsonObject json = new JsonObject();
+				json.put("queryString", new JsonObject().put("queryString", "데이타가 없습니다"));
+				
+				routingContext.response().putHeader("Content-Type", "application/json;charset=UTF-8");
+				routingContext.response().end(json.toString());
+				
+			} 
+				
+			System.err.println("pagination info after couting === " + pagination.toString());
+//				return getAllQueryManagePage(routingContext);
+			return searchQueryManage(routingContext);
+
+		}).compose(ar -> {
+			
+			Promise<JsonObject> promise = Promise.promise();
+			
+			routingContext.response().putHeader("Content-Type", "application/json;charset=UTF-8");
+			routingContext.response().end(ar.toString());
+			
+			return promise.future();
+		});
+	}
+	
+	private Future<JSONObject> getAllQueryManagePage(RoutingContext routingContext) {
+		
+		logger.info("Entered getAllQueryManagePage");
+		Promise<JSONObject> promise = Promise.promise();
+
+		try {
+			
+			int listSize = Integer.valueOf(routingContext.request().getParam("listSize"));
+			int startList = pagination.getStartList();
+			
+		
+			JsonObject json = new JsonObject();
+			json.put(ADDR, "getAllQueryManagePage");
+			json.put("startList", startList);
+			json.put("listSize", listSize);
+			
+			
+			System.err.println("startList =" + startList);
+			System.err.println("listSize = " + listSize);
+			System.err.println("pagination info = "+ pagination.toString());
+			
+			
+			
+			System.out.println("getAllQueryManagePage =========== " + json);
+			logger.info("attempting to connect to vertx.queryManage verticle");
+			
+			eb.request("vertx.queryManage", json.toString(), reply -> {
+				
+				// queryManage Verticle 요청 성공시
+				if (reply.succeeded()) {
+					
+					logger.info("vertx.queryManage success");
+					
+					String res = reply.result().body().toString();
+					JsonArray arr = new JsonArray(res);
+
+					System.out.println( "getallquerymanagepage result          " + arr);
+					logger.info("Successfully returned data in json format");
+					
+					System.out.println("pagination before sending data == " + pagination.toString() );
+					JSONObject result = new JSONObject();
+					result.put("queryString", arr);
+					result.put("pagination", pagination.toString());
+					promise.complete(result);
+					// 요청 실패시
+				} else {
+					
+					logger.error("failed executing inside vertx.queryManage");
+					messageReturn.commonReturn(routingContext, MessageReturn.RC_VERTICLE_FAIL_CODE, MessageReturn.RC_VERTICLE_FAIL_REASON, isXML);
+				}
+			});
+			
+		} catch(NullPointerException e) {
+			
+			logger.error("NullPointerException occurred");
+			messageReturn.commonReturn(routingContext, MessageReturn.RC_NULL_POINTER_EXCEPTION_CODE, MessageReturn.RC_NULL_POINTER_EXCEPTION_REASON, isXML);
+			
+		} catch(DecodeException e) {
+			
+			logger.error("DecodeException has occurred");
+			messageReturn.commonReturn(routingContext, MessageReturn.RC_DECODE_EXCEPTION_CODE, MessageReturn.RC_DECODE_EXCEPTION_REASON, isXML);
+			
+			
+		} catch(Exception e) {
+			
+			logger.error("Exception has occurred");
+			messageReturn.commonReturn(routingContext, MessageReturn.RC_EXCEPTION_CODE, MessageReturn.RC_EXCEPTION_REASON, isXML);
+			
+		}  
+		
+		return promise.future();
+
+	}
+	
+	private Future<JsonObject> getAllQueryManageCount(RoutingContext routingContext){
+		
+		Promise<JsonObject> promise = Promise.promise();
+
+		try {
+			
+			
+			futureJson.put("search", futureJson.getValue(ADDR));
+			futureJson.put(ADDR, "getAllQueryManageCount");
+			System.err.println("futureJson before =========== " + futureJson);
+			logger.info("attempting to connect to vertx.queryManage verticle");
+			
+			eb.request("vertx.queryManage", futureJson.toString(), reply -> {
+				
+				// queryManage Verticle 요청 성공시
+				if (reply.succeeded()) {
+					
+					logger.info("vertx.queryManage success");
+					
+					String res = reply.result().body().toString();
+					futureJson.put("count", res);
+					logger.info("Successfully returned data in json format");
+					
+					promise.complete(futureJson);
+					
+					// 요청 실패시
+				} else {
+					
+					logger.error("failed executing inside vertx.queryManage");
+					messageReturn.commonReturn(routingContext, MessageReturn.RC_VERTICLE_FAIL_CODE, MessageReturn.RC_VERTICLE_FAIL_REASON, isXML);
+				}
+			});
+			
+		} catch(NullPointerException e) {
+			
+			logger.error("NullPointerException occurred");
+			messageReturn.commonReturn(routingContext, MessageReturn.RC_NULL_POINTER_EXCEPTION_CODE, MessageReturn.RC_NULL_POINTER_EXCEPTION_REASON, isXML);
+			
+		} catch(DecodeException e) {
+			
+			logger.error("DecodeException has occurred");
+			messageReturn.commonReturn(routingContext, MessageReturn.RC_DECODE_EXCEPTION_CODE, MessageReturn.RC_DECODE_EXCEPTION_REASON, isXML);
+			
+			
+		} catch(Exception e) {
+			
+			logger.error("Exception has occurred");
+			messageReturn.commonReturn(routingContext, MessageReturn.RC_EXCEPTION_CODE, MessageReturn.RC_EXCEPTION_REASON, isXML);
+			
+		}  
+
+		return promise.future();
+	}
 	/**
 	 * Insert one query data
 	 * 
@@ -1502,13 +1868,13 @@ public class QueryRoute extends AbstractVerticle {
 		logger.info("Entered getIDInstance");
 		
 		try {
-			final String id = routingContext.request().getParam(COL_ID);
+			final String id = routingContext.request().getParam("id");
 			
 			// 올바른 정보 입력
 			if (!id.equals(null)) {
 				
 				JsonObject json = new JsonObject();;
-				json.put(COL_ID, id);
+				json.put("id", id);
 				json.put("address", "getIDInstance");
 				
 				logger.info("attempting to connect to vertx.instance verticle");
@@ -1780,6 +2146,7 @@ public class QueryRoute extends AbstractVerticle {
 				String value = jsonObject.get(key).toString();
 				
 				//스테이션 등록시 jsonObject.get(key)가 없을 경우 , ex. value = "", DecodeException 발생
+				//스테이션 check_input중 json 값이 있어서 :," 특수문자 제거
 				if(!"".equals(value) && !validUtil.isSqlSpecialCharacters(value)) {
 					return false;
 				}
@@ -2145,5 +2512,336 @@ public class QueryRoute extends AbstractVerticle {
 			
 		}
 		
+	}
+	
+	/**
+	 * Retrieves all query info
+	 * 
+	 * @param routingContext
+	 */
+	private void getAllService(RoutingContext routingContext) {
+		
+		logger.info("Entered getAllService");
+		
+		try {
+
+			JsonObject json = new JsonObject();
+			json.put(ADDR, "getAllService");
+		
+			logger.info("attempting to connect to vertx.getAllService verticle");
+
+			eb.request("vertx.service", json.toString(), reply -> {
+		
+				// queryManage Verticle 요청 성공시
+				if (reply.succeeded()) {
+					
+					logger.info("vertx.service success");
+					
+					String res = reply.result().body().toString();
+				
+					logger.info("Successfully returned data in json format");
+					routingContext.response().putHeader("content-type", "application/json; charset=utf-8")
+					.end(res);
+		
+					// 요청 실패시
+				} else {
+		
+					logger.error("failed executing inside vertx.queryManage");
+					messageReturn.commonReturn(routingContext, MessageReturn.RC_VERTICLE_FAIL_CODE, MessageReturn.RC_VERTICLE_FAIL_REASON, isXML);
+				}
+			});
+		
+		} catch(NullPointerException e) {
+			
+			logger.error("NullPointerException occurred");
+			messageReturn.commonReturn(routingContext, MessageReturn.RC_NULL_POINTER_EXCEPTION_CODE, MessageReturn.RC_NULL_POINTER_EXCEPTION_REASON, isXML);
+	
+		} catch(DecodeException e) {
+			
+			logger.error("DecodeException has occurred");
+			messageReturn.commonReturn(routingContext, MessageReturn.RC_DECODE_EXCEPTION_CODE, MessageReturn.RC_DECODE_EXCEPTION_REASON, isXML);
+	
+			
+		} catch(Exception e) {
+			
+			logger.error("Exception has occurred");
+			messageReturn.commonReturn(routingContext, MessageReturn.RC_EXCEPTION_CODE, MessageReturn.RC_EXCEPTION_REASON, isXML);
+	
+		}  
+		
+	}
+	
+	/**
+	 * Insert one query data
+	 * 
+	 * @param routingContext
+	 */
+	private void addOneService(RoutingContext routingContext) {
+
+		logger.info("Entered addOneService");
+
+	try {
+		JsonObject json = routingContext.getBodyAsJson();
+		json.put(ADDR, "addOneService");
+		
+		boolean isValid =this.checkQureyMange(json.toString(), routingContext);
+		
+		if(isValid) {
+			logger.info("attempting to connect to vertx.service verticle");
+
+			
+			eb.request("vertx.service", json.toString(), reply -> {
+				
+				// 요청 성공시
+				if(reply.succeeded()) {
+					
+					logger.info("vertx.service success");
+					String res = reply.result().body().toString();
+
+					logger.info("Successfully returned data in json format");
+					routingContext.response().putHeader("content-type", "application/json; charset=utf-8")
+					.end(res);
+					
+					// 요청 실패시
+				} else {
+					
+					logger.error("failed executing inside vertx.queryManage");
+					messageReturn.commonReturn(routingContext, MessageReturn.RC_VERTICLE_FAIL_CODE, MessageReturn.RC_VERTICLE_FAIL_REASON, isXML);
+
+				}
+				
+			});
+		}
+			
+		// 정보를 입력하지 않았을 시 
+		} catch(NullPointerException e) {
+			
+			logger.error("NullPointerException occurred");
+			messageReturn.commonReturn(routingContext, MessageReturn.RC_NULL_POINTER_EXCEPTION_CODE, MessageReturn.RC_NULL_POINTER_EXCEPTION_REASON, isXML);
+	
+		} catch(DecodeException e) {
+			
+			logger.error("DecodeException has occurred");
+			messageReturn.commonReturn(routingContext, MessageReturn.RC_DECODE_EXCEPTION_CODE, MessageReturn.RC_DECODE_EXCEPTION_REASON, isXML);
+	
+			
+		} catch(Exception e) {
+			
+			logger.error("Exception has occurred");
+			messageReturn.commonReturn(routingContext, MessageReturn.RC_EXCEPTION_CODE, MessageReturn.RC_EXCEPTION_REASON, isXML);
+	
+		} 
+		
+	}
+
+	/**
+	 * Select one query data with specified id
+	 * 
+	 * @param routingContext
+	 */
+	private void getOneService(RoutingContext routingContext) {
+
+		logger.info("Entered getOneQueryManage");
+		
+		try {
+			final String id = routingContext.request().getParam(COL_ID);
+	
+			// 올바른 정보 입력
+			if (!id.equals(null)) {
+				
+				JsonObject json = new JsonObject();
+				json.put(COL_ID, id);
+				json.put(ADDR, "getOneQueryManage");
+	
+				logger.info("attempting to connect to vertx.queryManage verticle");
+
+				eb.request("vertx.queryManage", json.toString(), reply -> {
+	
+					// 요청 성공시
+					if (reply.succeeded()) {
+						
+						logger.info("vertx.queryManage success");
+						String res = reply.result().body().toString();
+	
+						logger.info("Successfully returned data in json format");
+						routingContext.response().putHeader("content-type", "application/json; charset=utf-8")
+						.end(res);
+	
+						// 요청 실패시
+					} else {
+	
+						logger.error("failed executing inside vertx.queryManage");
+						messageReturn.commonReturn(routingContext, MessageReturn.RC_VERTICLE_FAIL_CODE, MessageReturn.RC_VERTICLE_FAIL_REASON, isXML);
+	
+					}
+				});
+	
+				// 아이디 입력하지 않았을 경우
+			} else {
+	
+				logger.error("wrong input value");
+				messageReturn.commonReturn(routingContext, MessageReturn.RC_WRONG_DATA_CODE, MessageReturn.RC_WRONG_DATA_REASON, isXML);
+			}
+			
+		} catch(NullPointerException e) {
+			
+			logger.error("NullPointerException occurred");
+			messageReturn.commonReturn(routingContext, MessageReturn.RC_NULL_POINTER_EXCEPTION_CODE, MessageReturn.RC_NULL_POINTER_EXCEPTION_REASON, isXML);
+	
+		} catch(DecodeException e) {
+			
+			logger.error("DecodeException has occurred");
+			messageReturn.commonReturn(routingContext, MessageReturn.RC_DECODE_EXCEPTION_CODE, MessageReturn.RC_DECODE_EXCEPTION_REASON, isXML);
+	
+			
+		} catch(Exception e) {
+			
+			logger.error("Exception has occurred");
+			messageReturn.commonReturn(routingContext, MessageReturn.RC_EXCEPTION_CODE, MessageReturn.RC_EXCEPTION_REASON, isXML);
+	
+		}  
+
+	}
+
+	/**
+	 * Updates query's queryString with specified id
+	 * 
+	 * @param routingContext
+	 */
+	private void updateOneService(RoutingContext routingContext) {
+
+		logger.info("Entered updateOneQueryManage");
+		
+		try {
+			
+			final String id = routingContext.request().getParam(COL_ID);
+
+			JsonObject json = routingContext.getBodyAsJson();
+			json.put(ADDR, "updateOneQueryManage");
+			json.put(COL_ID, id);
+			
+			boolean isValid = this.checkQureyMange(json.toString(), routingContext);
+			
+			logger.info("attempting to connect to vertx.queryManage verticle");
+			
+			if(isValid) {
+
+				eb.request("vertx.queryManage", json.toString(), reply -> {
+
+					// 요청 성공시
+					if (reply.succeeded()) {
+
+						logger.info("vertx.queryManage success");
+						String res = reply.result().body().toString();
+
+						logger.info("Successfully returned data in json format");
+						routingContext.response().putHeader("content-type", "application/json; charset=utf-8")
+						.end(res);
+						
+					} else {
+
+						logger.error("failed executing inside vertx.queryManage");
+						messageReturn.commonReturn(routingContext, MessageReturn.RC_VERTICLE_FAIL_CODE, MessageReturn.RC_VERTICLE_FAIL_REASON, isXML);
+					}
+
+				});
+
+				// 아이디 또는 body를 입력하지 않았을 경우
+			} /*else {
+				
+				logger.error("wrong input value");
+				messageReturn.commonReturn(routingContext, MessageReturn.RC_WRONG_DATA_CODE, MessageReturn.RC_WRONG_DATA_REASON, isXML);
+
+			}*/
+			
+		// 정보를 입력하지 않았을 시 
+		} catch(NullPointerException e) {
+			
+			logger.error("NullPointerException occurred");
+			messageReturn.commonReturn(routingContext, MessageReturn.RC_NULL_POINTER_EXCEPTION_CODE, MessageReturn.RC_NULL_POINTER_EXCEPTION_REASON, isXML);
+	
+		} catch(DecodeException e) {
+			
+			logger.error("DecodeException has occurred");
+			messageReturn.commonReturn(routingContext, MessageReturn.RC_DECODE_EXCEPTION_CODE, MessageReturn.RC_DECODE_EXCEPTION_REASON, isXML);
+	
+			
+		} catch(Exception e) {
+			
+			logger.error("Exception has occurred");
+			messageReturn.commonReturn(routingContext, MessageReturn.RC_EXCEPTION_CODE, MessageReturn.RC_EXCEPTION_REASON, isXML);
+	
+		}  
+
+	}
+
+	/**
+	 * Deletes one query with specified id
+	 * 
+	 * @param routingContext
+	 */
+	private void deleteOneService(RoutingContext routingContext) {
+		
+		logger.info("Entered deleteOneService");
+		
+		try {
+
+			String service_id = routingContext.request().getParam(S_ID);
+			JsonObject json = new JsonObject();
+			json.put(ADDR, "deleteOneService");
+			json.put(S_ID, service_id);
+			
+			boolean isValid = this.checkQureyMange(json.toString(), routingContext);
+
+			// 올바른 정보 입력
+			if (isValid) {
+				
+				logger.info("attempting to connect to vertx.queryManage verticle");
+
+				eb.request("vertx.service", json.toString(), reply -> {
+		
+					// queryManage Verticle 요청 성공시
+					if (reply.succeeded()) {
+						
+						logger.info("vertx.service success");
+						String res = reply.result().body().toString();
+
+						logger.info("Successfully returned data in json format");
+						routingContext.response().putHeader("content-type", "application/json; charset=utf-8")
+						.end(res);
+		
+						// query verticle와 연결 실패시
+					} else {
+		
+						logger.error("failed executing inside vertx.queryManage");
+						messageReturn.commonReturn(routingContext, MessageReturn.RC_VERTICLE_FAIL_CODE, MessageReturn.RC_VERTICLE_FAIL_REASON, isXML);
+					}
+				});
+		
+				// 아이디를 입력하지 않았다
+			}/* else {
+		
+				logger.error("wrong input value");
+				messageReturn.commonReturn(routingContext, MessageReturn.RC_WRONG_DATA_CODE, MessageReturn.RC_WRONG_DATA_REASON, isXML);
+		
+			}*/
+		
+		} catch(NullPointerException e) {
+			
+			logger.error("NullPointerException occurred");
+			messageReturn.commonReturn(routingContext, MessageReturn.RC_NULL_POINTER_EXCEPTION_CODE, MessageReturn.RC_NULL_POINTER_EXCEPTION_REASON, isXML);
+	
+		} catch(DecodeException e) {
+			
+			logger.error("DecodeException has occurred");
+			messageReturn.commonReturn(routingContext, MessageReturn.RC_DECODE_EXCEPTION_CODE, MessageReturn.RC_DECODE_EXCEPTION_REASON, isXML);
+	
+			
+		} catch(Exception e) {
+			
+			logger.error("Exception has occurred");
+			messageReturn.commonReturn(routingContext, MessageReturn.RC_EXCEPTION_CODE, MessageReturn.RC_EXCEPTION_REASON, isXML);
+	
+		}  
 	}
 }
