@@ -134,8 +134,8 @@ public class QueryManage extends AbstractVerticle {
 			JSONParser parser = new JSONParser();
 			SQLConnection connection = ar.result();
 
-			connection.query("SELECT * FROM " + TABLE_NAME + " WHERE "+ COL_ROLE +"= '"+ROLE+"'", results -> {
-
+//			connection.query("SELECT * FROM " + TABLE_NAME + " WHERE "+ COL_ROLE +"= '"+ROLE+"'", results -> {
+			connection.query("SELECT * FROM " + TABLE_NAME, results -> {
 				// 쿼리 목록 결과
 				List<JsonObject> fromDBQueryList = results.result().getRows();
 
@@ -295,6 +295,12 @@ public class QueryManage extends AbstractVerticle {
 			} else if (address.equals("searchLikeQueryManage")) {
 			
 				searchLikeQueryManage(message);
+			} else if (address.equals("getAllQueryManageCount")) {
+			
+				getAllQueryManageCount(message);
+			} else if (address.equals("getAllQueryManagePage")) {
+			
+				getAllQueryManagePage(message);
 			}
 		});
 
@@ -705,8 +711,9 @@ public class QueryManage extends AbstractVerticle {
 			jdbc.getConnection(ar -> {
 				SQLConnection connection = ar.result();
 
-				String queryFinalString = "DELETE FROM " + TABLE_NAME +" WHERE "+ COL_ID +" ='" + id + "'";
-				
+//				String queryFinalString = "DELETE FROM " + TABLE_NAME +" WHERE "+ COL_ID +" ='" + id + "'";
+				String queryFinalString = "DELETE FROM " + TABLE_NAME +" WHERE "+COL_ID+"='" + id + "'";
+
 				queryConnectionAll(queryFinalString, connection, message);
 				
 				//System.out.println("sqlType : "+sqlType+" id : "+id);
@@ -750,8 +757,9 @@ public class QueryManage extends AbstractVerticle {
 					+ COL_QSTR + "= '" + encodedValue + "', " 
 					+ COL_DESC + " = '" + desc + "', " 
 					+ COL_SQLT + " = '" + sqlType + "' " 
-					+ "WHERE "+ COL_ID + " = '"+ id +"' AND " + COL_ROLE + " = '" + ROLE + "'";
-					
+//					+ "WHERE "+ COL_ID + " = '"+ id +"' AND " + COL_ROLE + " = '" + ROLE + "'";
+					+ "WHERE " + COL_ID + "= '"+ id +"'";
+
 					queryConnectionAll(queryFinalString, connection, message);
 					
 					//System.out.println("sqlType : "+sqlType+" id : "+id+" queryString : "+queryString);
@@ -877,6 +885,104 @@ public class QueryManage extends AbstractVerticle {
 		});
 
 	}
+	
+	private void getAllQueryManagePage(Message<Object> message) {
+		
+		logger.info("entered getAllQueryManagePage");
+		JSONParser parser = new JSONParser();
+
+		jdbc.getConnection(ar -> {
+			
+			SQLConnection connection = ar.result();
+			try {
+
+				JSONObject json = (JSONObject) parser.parse(message.body().toString());
+
+				String startList = json.get("startList").toString();
+				String listSize = json.get("listSize").toString();
+				
+//				String queryFinalString = "SELECT * FROM "+TABLE_NAME + " limit " + startList + ", " + listSize ;
+//				System.err.println("실제 쿼리 ::: " + queryFinalString); 
+//				queryConnectionAll(queryFinalString, connection, message);
+				
+				///////////////////////////
+				String queryFinalString = "SELECT * FROM " + TABLE_NAME;
+			
+				JSONObject searchJson = new JSONObject();
+				
+				if(json.containsKey(COL_SQLT)) {
+					if(!"".equals(json.get(COL_SQLT))) {
+						searchJson.put(COL_SQLT, json.get(COL_SQLT));
+					} 
+				}
+				if(json.containsKey(COL_ID)) {
+					if(!"".equals(json.get(COL_ID))) {
+						searchJson.put(COL_ID, json.get(COL_ID));
+						
+					}
+				}
+				if(json.containsKey(COL_ROLE)) {
+					if(!"".equals(json.get(COL_ROLE))) {
+						searchJson.put(COL_ROLE, json.get(COL_ROLE));
+
+					}
+				}
+				if(json.containsKey(COL_QSTR)) {
+					if(!"".equals(json.get(COL_QSTR))) {
+						searchJson.put(COL_QSTR, json.get(COL_QSTR));
+
+					}
+				} 
+				if(json.containsKey(COL_DESC)) {
+					if(!"".equals(json.get(COL_DESC))) {
+						searchJson.put(COL_DESC, json.get(COL_DESC));
+
+					}
+				}
+
+				//order by
+				String orderBy = "";
+				if(json.containsKey("sortName")) {
+					
+					if(!"".equals(json.get("sortName"))) {
+						orderBy = " ORDER BY " + json.get("sortName").toString() + " " + json.get("sortOrder");
+						
+					}
+				}
+				
+				System.err.println("this is json from queryRoute === " + json);
+				
+				if("".equals(json.get("search"))) {
+					
+					queryFinalString = "SELECT * FROM "+TABLE_NAME  + orderBy + " limit " + startList + ", " + listSize;
+					
+				} else {
+					
+					String edit = "SELECT * FROM " + TABLE_NAME + " WHERE ";
+					
+					for(Object key : searchJson.keySet()) {
+						edit = edit + key.toString() + " LIKE '%" + searchJson.get(key).toString() + "%' and ";
+						System.err.println(edit);
+					}
+					
+					
+					edit = edit.substring(0, edit.length() - 4) + orderBy +" limit " + startList + ", " + listSize ;
+					System.err.println(edit);
+					queryFinalString = edit;
+				}
+				queryConnectionAll(queryFinalString, connection, message);
+
+			
+			} catch (ParseException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+
+			
+			
+		});
+		
+	}
 
 	private void getOneQueryManage(Message<Object> message) {
 
@@ -938,7 +1044,12 @@ public class QueryManage extends AbstractVerticle {
 					+ "'";
 					
 				}
-		
+				
+				String startList = json.get("startList").toString();
+				String listSize = json.get("listSize").toString();
+				
+				edit = edit + " LIMIT " + startList + ", " + listSize;
+				
 				System.err.println(edit);
 				//String queryFinalString = "SELECT * FROM "+TABLE_NAME+" WHERE ID= '" + json.get("id").toString() + "' AND ROLE= '"+ROLE+"'";
 				String queryFinalString = edit;
@@ -988,9 +1099,10 @@ public class QueryManage extends AbstractVerticle {
 					+ "%'";
 					
 				}
+				String startList = json.get("startList").toString();
+				String listSize = json.get("listSize").toString();
 				
-				
-				
+				edit = edit + " LIMIT " + startList + ", " + listSize;
 				System.err.println(edit);
 				//String queryFinalString = "SELECT * FROM "+TABLE_NAME+" WHERE ID= '" + json.get("id").toString() + "' AND ROLE= '"+ROLE+"'";
 				String queryFinalString = edit;
@@ -1005,6 +1117,125 @@ public class QueryManage extends AbstractVerticle {
 			messageReturn.commonReturn(message, MessageReturn.QC_PARSE_EXCEPTION_CODE, MessageReturn.QC_PARSE_EXCEPTION_REASON);
 			
 		}
+	}
+	
+	private void getAllQueryManageCount(Message<Object> message) {
+
+		logger.info("entered getAllQueryManageCount");
+
+		jdbc.getConnection(ar -> {
+
+			SQLConnection connection = ar.result();
+			try {
+				String queryFinalString = "SELECT COUNT(*) AS count FROM " + TABLE_NAME;
+				JSONParser parser = new JSONParser();
+
+			
+				JSONObject json = (JSONObject) parser.parse(message.body().toString());
+				JSONObject searchJson = new JSONObject();
+				
+				if(json.containsKey(COL_SQLT)) {
+					if(!"".equals(json.get(COL_SQLT))) {
+						searchJson.put(COL_SQLT, json.get(COL_SQLT));
+					} 
+				}
+				if(json.containsKey(COL_ID)) {
+					if(!"".equals(json.get(COL_ID))) {
+						searchJson.put(COL_ID, json.get(COL_ID));
+						
+					}
+				}
+				if(json.containsKey(COL_ROLE)) {
+					if(!"".equals(json.get(COL_ROLE))) {
+						searchJson.put(COL_ROLE, json.get(COL_ROLE));
+
+					}
+				}
+				if(json.containsKey(COL_QSTR)) {
+					if(!"".equals(json.get(COL_QSTR))) {
+						searchJson.put(COL_QSTR, json.get(COL_QSTR));
+
+					}
+				} 
+				if(json.containsKey(COL_DESC)) {
+					if(!"".equals(json.get(COL_DESC))) {
+						searchJson.put(COL_DESC, json.get(COL_DESC));
+
+					}
+				}
+				
+				String orderBy = "";
+				if(json.containsKey("sortName")) {
+					
+					//order by
+					if(!"".equals(json.get("sortName"))) {
+						orderBy = " ORDER BY " + json.get("sortName").toString() + " " + json.get("sortOrder");
+						
+					}
+				}
+//				System.err.println("this is my address ==" + search);
+				System.err.println("this is json from queryRoute === " + json);
+				
+				if("".equals(json.get("search"))) {
+					
+					queryFinalString = "SELECT COUNT(*) AS count FROM " + TABLE_NAME + orderBy;
+					
+				} else {
+					
+					String edit = "SELECT COUNT(*) AS count FROM " + TABLE_NAME + " WHERE ";
+					
+					for(Object key : searchJson.keySet()) {
+						edit = edit + key.toString() + " LIKE '%" + searchJson.get(key).toString() + "%' and ";
+						System.err.println(edit);
+					}
+					
+					edit = edit.substring(0, edit.length() - 4) + orderBy;
+					System.err.println(edit);
+					queryFinalString = edit;
+				}
+
+				connection.query(queryFinalString, finalResult -> {
+	
+					// DB조회 결과 성공시
+					if (finalResult.succeeded()) {
+	
+						// 결과가 있을시
+						if (finalResult.result().getNumRows() > 0) {
+	
+							List<JsonObject> resultList = finalResult.result().getRows().stream()
+									.collect(Collectors.toList());
+							
+							String value = resultList.get(0).getValue("count").toString();
+							message.reply(value.toString());
+							System.out.println("count ==== " + value);
+							logger.info("Succeeded getting data from select query");
+	
+							// 조회는 됐지만 결과는 없다
+						} else {
+	
+							logger.warn("No data found for select query");
+							messageReturn.commonReturn(message, MessageReturn.QC_NO_SELECT_DATA_FOUND_CODE, MessageReturn.QC_NO_SELECT_DATA_FOUND_REASON);
+						}
+	
+						// 조회가 제대로 안되었다
+					} else {
+	
+						// DB에서 보내주는 error code와 error 내용
+						SQLException ex = (SQLException) finalResult.cause();
+						messageReturn.dbReturn(message, ex);
+	
+					}
+	
+					connection.close();
+	
+				});
+				
+			} catch (ParseException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+		});
+
 	}
 	
 	public void setAsyncMapT(SharedData sharedData, String asyncMapName, String key, Object insertValue) {
