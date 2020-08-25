@@ -24,7 +24,7 @@ public class ValidationUtil {
 	private final static String REG_URL = "^((https?:\\/\\/)?(www\\.)?[-a-zA-Z0-9@:%._\\+~#=]{2,256}\\.[a-z]{2,24}\\b([-a-zA-Z0-9@:%_\\+.~#?&//=]*))";
 	private final static String REG_DIGITS = "^\\d+$";
 	private final static String REG_NUMBER = "^-?\\d+$";
-	private final static String REG_SQL_INJECTION = "^[^:;<>()&'\"+#*=]{1,}?$";
+	private final static String REG_SQL_INJECTION = "^[^;<>()&'+#*=]{1,}?$";
 	private final static String REG_SQL_INJECTION2 = ".*[|]{2,}.*|.*[-]{2,}.*";
 
 	public ValidationUtil() {
