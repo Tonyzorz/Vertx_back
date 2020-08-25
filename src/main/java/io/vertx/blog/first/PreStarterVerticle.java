@@ -60,7 +60,7 @@ public class PreStarterVerticle extends AbstractVerticle {
 			
 			System.out.println("role : "+config().getString("role"));
 			
-			connection.query("SELECT * FROM INSTANCE WHERE ROLE='"+config().getString("role")+"'", results -> {					
+			connection.query("SELECT * FROM INSTANCE WHERE ROLE='adm'", results -> {					
 				
 				
 				if(results.succeeded()) {

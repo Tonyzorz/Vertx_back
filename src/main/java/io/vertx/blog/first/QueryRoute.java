@@ -428,7 +428,9 @@ public class QueryRoute extends AbstractVerticle {
 			// body에 값이 있을때 validation vertx 실행
 			if (!json.isEmpty()) {
 				
-				boolean validationValid = this.checkSql(json.toString());
+				//특수문자 포함 여부 검사 (예외 처리가 많이 필요하여 주석 처리) 
+				//boolean validationValid = this.checkSql(json.toString());
+				boolean validationValid = true;
 				
 				// validation 문제 없을시 참
 				if (validationValid) {
@@ -593,7 +595,9 @@ public class QueryRoute extends AbstractVerticle {
 			// body에 값이 있을때 validation vertx 실행
 			if (!json.isEmpty()) {
 				
-				boolean validationValid = this.checkSql(json.toString());
+				//특수문자 포함 여부 검사 (예외 처리가 많이 필요하여 주석 처리) 
+				//boolean validationValid = this.checkSql(json.toString());
+				boolean validationValid = true;
 				
 				// validation 문제 없을시 참
 				if (validationValid) {
