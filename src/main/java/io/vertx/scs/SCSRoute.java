@@ -670,7 +670,6 @@ public class SCSRoute extends AbstractVerticle {
 					jsonObject.put("wayPointIdx", 0);
 					jsonObject.put("wayPoint", "");
 					jsonObject.put("landing", "");
-					jsonObject.put("ai_detect_type", "");
 					jsonObject.put("comp_id", "");
 					jsonObject.put("user_id", "");
 					jsonObject.put("attr_name", "");
