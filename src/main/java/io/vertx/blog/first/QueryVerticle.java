@@ -240,7 +240,7 @@ public class QueryVerticle extends AbstractVerticle {
 	private void queryConnectionAll(String queryFinalString, SQLConnection connection, Message<Object> message) {
 
 		// 쿼리들 구분하기 위해서, Select쿼리 실행하는 메소드는 insert,update,delete쿼리 메소드랑 다르다
-		String firstSixLetters = queryFinalString.substring(0, 6);
+		String firstSixLetters = queryFinalString.trim().substring(0,6);
 
 		// select 쿼리 실행
 		if (firstSixLetters.equalsIgnoreCase("select")) {
