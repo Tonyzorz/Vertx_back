@@ -744,6 +744,7 @@ public class QueryManage extends AbstractVerticle {
 			String queryString = parsedBodyData.get(COL_QSTR).toString();
 			String desc = parsedBodyData.get(COL_DESC).toString();
 			String sqlType = parsedBodyData.get(COL_SQLT).toString().toLowerCase();
+			String role = parsedBodyData.get(COL_ROLE).toString().toLowerCase();
 			 
 			try {
 				String encodedValue = AES256Util.AES_Encode( queryString );
@@ -756,7 +757,8 @@ public class QueryManage extends AbstractVerticle {
 					+ " SET "+ COL_ID +"='" + id + "', " 
 					+ COL_QSTR + "= '" + encodedValue + "', " 
 					+ COL_DESC + " = '" + desc + "', " 
-					+ COL_SQLT + " = '" + sqlType + "' " 
+					+ COL_SQLT + " = '" + sqlType + "', " 
+					+ COL_ROLE + " = '" + role + "' " 
 //					+ "WHERE "+ COL_ID + " = '"+ id +"' AND " + COL_ROLE + " = '" + ROLE + "'";
 					+ "WHERE " + COL_ID + "= '"+ id +"'";
 

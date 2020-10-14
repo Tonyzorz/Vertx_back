@@ -81,16 +81,20 @@ public class QueryWebVerticle extends AbstractVerticle {
 		router.get("/").handler(this::default_main);
 		
 		//queryManage
-		router.get("/find").handler(this::find_getAllQueryManage);
+		//router.get("/find").handler(this::find_getAllQueryManage);
+		router.get("/find").handler(this::find_getAllQueryManagePage);
+		router.post("/find").handler(this::find_getAllQueryManagePage);
 		router.get("/find/:queryId").handler(this::find_getOneQueryManage);
-		router.delete("/delete/:queryId").handler(this::delete_deleteOneQueryManage);
+		router.delete("/delete/*").handler(this::delete_deleteOneQueryManage);
 		router.post("/queryInsert").handler(this::query_addOneQueryManage);
 		router.post("/queryUpdate").handler(this::update_updateOneQueryManage);
 		router.get("/headerData").handler(this::get_headerData);
 		router.post("/querySearch").handler(this::searchQueryManage);
 		
 		//property
-		router.get("/propertyfind").handler(this::find_getAllProperty);
+//		router.get("/propertyfind").handler(this::find_getAllProperty);
+		router.get("/propertyfind").handler(this::find_getAllPropertyPage);
+		router.post("/propertyfind").handler(this::find_getAllPropertyPage);
 		router.get("/propertyfind/:id").handler(this::find_getOneProperty);
 		router.delete("/propertyDelete/:id").handler(this::delete_deleteOneProperty);
 		router.post("/propertyInsert").handler(this::query_addOneProperty);
@@ -444,52 +448,25 @@ public class QueryWebVerticle extends AbstractVerticle {
 		WebClient client = WebClient.create(vertx);
 
 		JsonObject json = routingContext.getBodyAsJson();
-		JsonObject sendJson = new JsonObject();
-		
-		String from = json.getString("from");
-		String queryString = json.getString("searchQueryString");
-		String descript = json.getString("searchDescript");
-		String sqlType = json.getString("searchSqlType");
-		String role = json.getString("searchRole");
-
-		
-		if("searchLike".equals(from)) {
-			
-			if(!"".equals(queryString)) {
-				
-				sendJson.put("queryString", queryString);
-			}
-			if(!"".equals(descript)) {
-				
-				sendJson.put("descript", descript);
-			}
-			
-		} else {
-			if(!"".equals(sqlType)) {
-				
-				sendJson.put("sqlType", sqlType);
-			}
-			if(!"".equals(role)) {
-				
-				sendJson.put("role", role);
-			}
-		}
+		String listSize = json.getValue("listSize").toString();
+		String page = json.getValue("page").toString();
+		String range = json.getValue("range").toString();
 		
 		logger.info("requesting to post " + httpIP + ":" + port + "/queryManage");
-
-		client.post(port, httpIP, "/queryManage/search")
-				.sendJsonObject(sendJson, ar -> {
+		String url = "/queryManage/search?" + "listSize=" + listSize + "&page=" + page + "&range=" + range;
+		client.post(port, httpIP, url)
+				.sendJsonObject(json, ar -> {
 					if (ar.succeeded()) {
 						
 						logger.info("response from post " + httpIP + ":" + port + "/queryManage/search === success" );
 
 						JSONParser parser = new JSONParser();
-						JSONArray array = new JSONArray();
+						JSONObject obj = new JSONObject();
 						try {
-							array = (JSONArray) parser.parse(ar.result().bodyAsString());
+							obj = (JSONObject) parser.parse(ar.result().bodyAsString());
 
 							routingContext.response().putHeader("Content-Type", "application/json;charset=UTF-8");
-							routingContext.response().end(array.toString());
+							routingContext.response().end(obj.toString());
 
 						} catch (ParseException e) {
 							e.printStackTrace();
@@ -573,9 +550,17 @@ public class QueryWebVerticle extends AbstractVerticle {
 		WebClient client = WebClient.create(vertx);
 
 		String queryId = routingContext.request().getParam(COL_ID);
+		String listSize = routingContext.request().getParam("listSize");
+		String listCnt = routingContext.request().getParam("listCnt");
+		String range = routingContext.request().getParam("range");
+		String page = routingContext.request().getParam("page");
 		
 		JsonObject json = new JsonObject(routingContext.getBodyAsString());
-		
+		json.put("listSize", listSize);
+		json.put("listCnt", listCnt);
+		json.put("range", range);
+		json.put("page", page);
+
 		logger.info("requesting to delete " + httpIP + ":" + port + "/queryManage/:queryId");
 
 		client.delete(port, httpIP, "/queryManage/" + queryId).sendJsonObject(json, ar -> {
@@ -584,7 +569,7 @@ public class QueryWebVerticle extends AbstractVerticle {
 				
 				logger.info("response from delete " + httpIP + ":" + port + "/queryManage/:queryId === success" );
 
-				routingContext.response().end(ar.result().toString());
+				routingContext.response().end(ar.result().bodyAsString());
 
 			} else {
 				
@@ -633,6 +618,85 @@ public class QueryWebVerticle extends AbstractVerticle {
 
 	}
 	
+	/**
+	 * 모든 쿼리 조회
+	 * 
+	 * @param routingContext
+	 */
+	private void find_getAllQueryManagePage(RoutingContext routingContext) {
+
+		logger.info("entered find_getAllQueryManagePage");
+
+		WebClient client = WebClient.create(vertx);
+		
+		String range = routingContext.request().getParam("range");
+		String page = routingContext.request().getParam("page");
+		String listSize = routingContext.request().getParam("listSize");
+		String sortName = routingContext.request().getParam("sortName");
+		String sortOrder = routingContext.request().getParam("sortOrder");
+		
+		System.err.println("range is ====== "+ range + "   page is ======= " + page + "listSize ====== " + listSize);
+
+		if(range == null) {
+			range = "1";
+		} 
+		if(page == null) {
+			page = "1";
+		}
+		if(listSize == null) {
+			listSize = "10";
+		}
+		
+		
+		JsonObject jsonz = new JsonObject();
+		if(sortName != null) {
+			jsonz.put("sortName", sortName);
+		}
+		if(sortOrder != null) {
+			jsonz.put("sortOrder", sortOrder);
+		}
+		
+		System.err.println("??????????????????????????????????????????" + routingContext.getBody().length());
+		boolean isEmpty = (1 > (routingContext.getBody().length())) ? true : false;
+		System.out.println("is it empty  " +  isEmpty);
+		if(!isEmpty) {
+			jsonz = new JsonObject(routingContext.getBodyAsString());
+			
+		}
+		
+		System.err.println("range is ====== "+ range + "   page is ======= " + page);
+		System.err.println("body data is +++++++ " + jsonz);
+		logger.info("requesting to get " + httpIP + ":" + port + "/queryManage/paging");
+
+		String url = "/queryManage/paging?listSize=" + listSize + "&page=" + page + "&range=" + range; 
+		client.post(port, httpIP, url).sendJsonObject(jsonz, ar -> {
+
+			if (ar.succeeded()) {
+				
+				logger.info("response from get " + httpIP + ":" + port + "/queryManage === success" );
+
+				String str = ar.result().bodyAsString();
+				JSONParser parser = new JSONParser();
+				try {
+					JSONObject json = (JSONObject) parser.parse(str);
+					routingContext.response().putHeader("Content-Type", "application/json;charset=UTF-8");
+					routingContext.response().end(json.toString());
+				} catch (ParseException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				}
+
+			} else {
+				
+				logger.info("response from get " + httpIP + ":" + port + "/queryManage === fail" );
+
+				routingContext.response().putHeader("Content-Type", "application/json;charset=UTF-8");
+				routingContext.response().end(new JsonObject().put("error", ar.cause().getMessage()).encode());
+			}
+
+		});
+
+	}
 	
 	
 	/**
@@ -843,6 +907,86 @@ public class QueryWebVerticle extends AbstractVerticle {
 			
 		});
 		
+	}
+	
+	/**
+	 * 모든 쿼리 조회
+	 * 
+	 * @param routingContext
+	 */
+	private void find_getAllPropertyPage(RoutingContext routingContext) {
+
+		logger.info("entered find_getAllPropertyPage");
+
+		WebClient client = WebClient.create(vertx);
+		
+		String range = routingContext.request().getParam("range");
+		String page = routingContext.request().getParam("page");
+		String listSize = routingContext.request().getParam("listSize");
+		String sortName = routingContext.request().getParam("sortName");
+		String sortOrder = routingContext.request().getParam("sortOrder");
+		
+		System.err.println("range is ====== "+ range + "   page is ======= " + page + "listSize ====== " + listSize);
+
+		if(range == null) {
+			range = "1";
+		} 
+		if(page == null) {
+			page = "1";
+		}
+		if(listSize == null) {
+			listSize = "10";
+		}
+		
+		
+		JsonObject jsonz = new JsonObject();
+		if(sortName != null) {
+			jsonz.put("sortName", sortName);
+		}
+		if(sortOrder != null) {
+			jsonz.put("sortOrder", sortOrder);
+		}
+		
+		System.err.println("??????????????????????????????????????????" + routingContext.getBody().length());
+		boolean isEmpty = (1 > (routingContext.getBody().length())) ? true : false;
+		System.out.println("is it empty  " +  isEmpty);
+		if(!isEmpty) {
+			jsonz = new JsonObject(routingContext.getBodyAsString());
+			
+		}
+		
+		System.err.println("range is ====== "+ range + "   page is ======= " + page);
+		System.err.println("body data is +++++++ " + jsonz);
+		logger.info("requesting to get " + httpIP + ":" + port + "/property/paging");
+
+		String url = "/property/paging?listSize=" + listSize + "&page=" + page + "&range=" + range; 
+		client.post(port, httpIP, url).sendJsonObject(jsonz, ar -> {
+
+			if (ar.succeeded()) {
+				
+				logger.info("response from get " + httpIP + ":" + port + "/queryManage === success" );
+
+				String str = ar.result().bodyAsString();
+				JSONParser parser = new JSONParser();
+				try {
+					JSONObject json = (JSONObject) parser.parse(str);
+					routingContext.response().putHeader("Content-Type", "application/json;charset=UTF-8");
+					routingContext.response().end(json.toString());
+				} catch (ParseException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				}
+
+			} else {
+				
+				logger.info("response from get " + httpIP + ":" + port + "/queryManage === fail" );
+
+				routingContext.response().putHeader("Content-Type", "application/json;charset=UTF-8");
+				routingContext.response().end(new JsonObject().put("error", ar.cause().getMessage()).encode());
+			}
+
+		});
+
 	}
 	
 	/**
