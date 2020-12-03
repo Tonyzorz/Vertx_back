@@ -19,7 +19,7 @@
 	<group>
 		<name>dev</name>
 	</group>
-	<management-center enabled="true">http://192.168.11.6:8080/hazelcast-mancenter
+	<management-center enabled="true">http://192.168.11.2:8080/hazelcast-mancenter
 	</management-center>
 	<network>
 		<port auto-increment="true" port-count="10000">5701</port>
@@ -36,9 +36,9 @@
 			</multicast>
 			<tcp-ip enabled="true">
 				<member-list>
-					<!-- <member>192.168.123.70</member> -->
-					<member>192.168.11.6</member>
+					<!-- <member>192.168.123.70</member> -->					
 					<member>192.168.11.2</member>
+					<member>192.168.11.6</member>
 					<!-- <required-member>192.168.199.128</required-member> -->
 				</member-list>
 			</tcp-ip>
