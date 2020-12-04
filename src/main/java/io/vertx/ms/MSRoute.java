@@ -189,9 +189,11 @@ public class MSRoute extends AbstractVerticle {
 		String ms_update = configuration.getString("router.ms_update");
 		String ms_delete = configuration.getString("router.ms_delete");
 		String ms_uploadMission = configuration.getString("router.ms_uploadMission");
+		String ms_reverseUploadMission = configuration.getString("router.ms_reverseUploadMission");
 		String ms_serviceList = configuration.getString("router.ms_serviceList");
 		String ms_commandByService = configuration.getString("router.ms_commandByService");
 		String ms_geofenceList = configuration.getString("router.ms_geofenceList");
+		
 		String ms_test = "/mission/test";
 		
 		router.post(ms_list).handler(this::getAllMission);
@@ -200,6 +202,7 @@ public class MSRoute extends AbstractVerticle {
 		router.post(ms_delete).handler(this::deleteMission);
 		router.get(ms_details).handler(this::getMissionDetail);
 		router.get(ms_uploadMission).handler(this::getMissionToUpload);
+		router.post(ms_reverseUploadMission).handler(this::getReverseMissionToUpload);
 		router.get(ms_serviceList).handler(this::getServiceTypeList);
 		router.post(ms_commandByService).handler(this::getCommandByServiceType);
 		router.post(ms_geofenceList).handler(this::getGeofence);
@@ -2703,501 +2706,7 @@ public class MSRoute extends AbstractVerticle {
 				
 			}).onSuccess(objList->{
 				
-				JSONObject res = (JSONObject) objList.get(0);
-				LinkedHashMap<String, ArrayList<ArrayList<String>>> mapAttrList = (LinkedHashMap<String, ArrayList<ArrayList<String>>>) objList.get(1);
-				LinkedHashMap<String, ArrayList<ArrayList<String>>> mapDroneAttrList = (LinkedHashMap<String, ArrayList<ArrayList<String>>>) objList.get(2);
-				//LinkedHashMap<String, ArrayList<ArrayList<String>>> mapDroneAttrList2 = (LinkedHashMap<String, ArrayList<ArrayList<String>>>) objList.get(3);
-				LinkedHashMap<String, ArrayList<String>> mapDroneAttrList2 = (LinkedHashMap<String, ArrayList<String>>) objList.get(3);
-				Map<String,Map<String,String>> attrMap = (HashMap<String,Map<String,String>>) objList.get(4);
-				LinkedHashMap<String, ArrayList<String>> mapCmdList = (LinkedHashMap<String, ArrayList<String>>) objList.get(5);
-				//int cmdCodeIdx = (int) objList.get(6);
-								
-				System.out.println("mission res :"+res.toJSONString());
-				System.out.println("mapAttrList res :"+mapAttrList.toString());
-				System.out.println("mapDroneAttrList res :"+mapDroneAttrList.toString());
-				System.out.println("mapDroneAttrList2 res :"+mapDroneAttrList2.toString());
-				System.out.println("mapCmdList res :"+mapCmdList.toString());
-				//System.out.println("cmdCodeIdx res :"+cmdCodeIdx);
-				
-				LinkedHashMap<String, ArrayList<LinkedHashMap<String, String>>> mapCmdListGroupOut = new LinkedHashMap<String, ArrayList<LinkedHashMap<String, String>>>();
-				
-				
-				int wayPointCnt = 0;
-				
-				for(String strKey : mapCmdList.keySet()) {
-					
-					String strCmdId = strKey;
-					String strCmdCode = mapCmdList.get(strCmdId).get(0);//CMD_CODE
-					ArrayList<ArrayList<String>> arrayRows = mapDroneAttrList.get(strCmdCode);
-					
-					// Default_Value 설정
-					LinkedHashMap<String, String> mapCmd = new LinkedHashMap<String, String>();
-					for(int i=0; i<arrayRows.size(); i++ ) {
-						
-						ArrayList<String> arrayRow = arrayRows.get(i);
-						
-						// ATTR_NAME
-						String strAttrName = arrayRow.get(1);
-						if(null == strAttrName) strAttrName = "";
-						
-						// DEFAILT_VALUE
-						String strDefVal = arrayRow.get(6);
-						if(null == strDefVal) strDefVal = "";
-						
-						if( i == 0 ) mapCmd.put("command", strCmdCode);
-						mapCmd.put(strAttrName, strDefVal);
-						
-						
-						if("16".equals(strCmdCode) && "param2".equals(strAttrName)) {
-							mapCmd.put(strAttrName, Integer.toString(++wayPointCnt));							
-						}else {
-							mapCmd.put(strAttrName, strDefVal);
-						}						
-						
-					}
-					
-					LinkedHashMap<String, LinkedHashMap<String, String>> mapCmdListTemp = new LinkedHashMap<String, LinkedHashMap<String, String>>();
-					mapCmdListTemp.put(strCmdCode, mapCmd);
-					
-					ArrayList<ArrayList<String>> arrayUIAttrRows = mapAttrList.get(strCmdId);
-					
-					if(arrayUIAttrRows != null && !arrayUIAttrRows.isEmpty()) {
-						for(int i=0; i<arrayUIAttrRows.size(); i++) {
-							
-							ArrayList<String> arrayUIAttrRow = arrayUIAttrRows.get(i);
-							String strRefAttrCode = arrayUIAttrRow.get(3);// REF_ATTR_CODE 값
-							String strUIAttrValue = arrayUIAttrRow.get(6);// ATTR_VALUE 값
-							
-							if( null == strRefAttrCode || strRefAttrCode.isEmpty() ) continue;
-							
-							ArrayList<String> arrayValues = mapDroneAttrList2.get(strRefAttrCode);
-							String strDroneCmdCode = arrayValues.get(0);// CMD_CODE 값
-							String strDroneAttrName = arrayValues.get(1);// ATTR_NAME 값
-							
-							if(mapCmdListTemp.containsKey(strDroneCmdCode)) {
-								
-								LinkedHashMap<String, String> mapCmdNew = new LinkedHashMap<String, String>();
-								mapCmdNew = mapCmdListTemp.get(strDroneCmdCode);
-								mapCmdNew.put(strDroneAttrName, strUIAttrValue);
-								mapCmdListTemp.put(strDroneCmdCode, mapCmdNew);
-								
-								continue;
-								
-							}else {
-								
-								ArrayList<ArrayList<String>> arrayRowsNew = mapDroneAttrList.get(strDroneCmdCode);
-								LinkedHashMap<String, String> mapCmdNew = new LinkedHashMap<String, String>();
-								for(int j=0; j < arrayRowsNew.size(); j++) {
-								
-									ArrayList<String> arrayRow = arrayRowsNew.get(j);
-									
-									// ATTR_NAME
-									String strAttrName = arrayRow.get(1);
-									if(null == strAttrName) strAttrName = "";
-									
-									// DEFAILT_VALUE
-									String strDefVal = arrayRow.get(6);
-									if(null == strDefVal) strDefVal = "";
-									
-									if( j == 0 ) mapCmdNew.put("command", strDroneCmdCode);
-									mapCmdNew.put(strAttrName, strDefVal);
-									
-								}
-								
-								mapCmdNew.put(strDroneAttrName, strUIAttrValue);
-								mapCmdListTemp.put(strDroneCmdCode, mapCmdNew);
-								
-							}
-							
-						}
-						
-					}
-					
-					ArrayList<LinkedHashMap<String, String>> arrayCmds = new ArrayList<LinkedHashMap<String, String>>();
-					for(String strKeyTemp : mapCmdListTemp.keySet()) {
-						arrayCmds.add(mapCmdListTemp.get(strKeyTemp));												
-					}
-					String strMapKey = strCmdId + "-" + strCmdCode;
-					mapCmdListGroupOut.put(strMapKey, arrayCmds);					
-					
-				}
-				
-				
-				LinkedHashMap<String, String> mapMission = new LinkedHashMap<String, String>();
-				
-				ArrayList<String> resKeys = IteratorUtils.toArrayList(res.keySet().iterator(),res.size());
-				ArrayList<String> resVals = IteratorUtils.toArrayList(res.values().iterator(),res.size());
-								
-				for(int i=0; i<res.size(); i++ ) {
-					mapMission.put(resKeys.get(i), resVals.get(i));
-				}
-				
-				System.out.println("mapMission : "+mapMission.toString());
-				
-				System.out.println("mapCmdListGroupOut : "+mapCmdListGroupOut.toString());
-				
-				
-				int nCntRepeat = 0;
-				String strRepeat = mapMission.get("REPEAT");
-				if(null != strRepeat && !strRepeat.isEmpty()) {
-					nCntRepeat = Integer.parseInt(strRepeat);
-				}
-				
-				boolean bRoundTrip = false;
-				String strRoundTrip = mapMission.get("ROUNDTRIP");
-				if(null != strRoundTrip && !strRoundTrip.isEmpty()) {
-					if("true".equals(strRoundTrip)) bRoundTrip = true;
-				}
-				
-				ArrayList<LinkedHashMap<String, String>> arrayCmdListOut = new ArrayList<LinkedHashMap<String, String>>();
-				ArrayList<LinkedHashMap<String, String>> arrayRoundTrip = new ArrayList<LinkedHashMap<String, String>>();
-				ArrayList<LinkedHashMap<String, String>> arrayRepeat = new ArrayList<LinkedHashMap<String, String>>();
-				
-				ArrayList<String> arrayMapping = new ArrayList<String>();
-				for(String strKey3 : mapCmdListGroupOut.keySet()) {
-					String strUICmdCode = strKey3.substring(strKey3.lastIndexOf("-")+1);
-					arrayMapping.add(strKey3);
-				}
-				
-				ArrayList<String> arrayWayPoints = new ArrayList<String>();
-				ArrayList<String> arrayWPRoundTrip = new ArrayList<String>();
-				ArrayList<String> arrayWPRepeat = new ArrayList<String>();
-				
-				ArrayList<String> arrayWayPointTemp = new ArrayList<String>();
-				
-				for(int i=0; i<arrayMapping.size(); i++) {
-					
-					// strValue( cmd_id + "-" + cmd_code 로 구성됨) ex) "1-22", "2-16", "3-16", .. "5-21"
-					String strValue = arrayMapping.get(i);
-					String strUICmdCode = strValue.substring(strValue.lastIndexOf("-")+1);
-					if("16".equals(strUICmdCode)) arrayWayPointTemp.add(String.valueOf(i));
-				}
-				
-				// RoundTrip 관련
-				
-				if(bRoundTrip) {
-					// mapCmdListGroupOut 키를 기준으로 round-trip 하고, 최종적으로 drone command를 풀어서 기술하는 방법으로 구현
-					// UI Command 리스트에서 마지막 WayPoint를 제회한 부분은 Reverse 하여 기존 WayPoint에 추가하여 RoundTrip을 생성한다.
-					
-					
-					// 마지막 WayPoint는 reverse WayPoint 구간에서 제외하기 위해 "-2"를 함
-					// EX) ""로 묶인 WayPoint들이 reverse 하여 생성된 구간임
-					//     W1 -> W2 -> W3 ==> W1 -> W2 -> W3 -> "W2 -> W1"
-					
-					String strLastWPName = arrayWayPointTemp.get(arrayWayPointTemp.size() - 2);
-					int nLastIndex = arrayWayPointTemp.indexOf(strLastWPName);
-					
-					ArrayList<String> arrayReverse = new ArrayList<String>();
-					for(int j=0; j<=nLastIndex; j++) {
-						arrayReverse.add(arrayWayPointTemp.get(j));
-					}
-					
-					// Reverse 된 WayPoint를 구성한다.
-					Collections.reverse(arrayReverse);
-					
-					// 기존 WayPoint에 Reverse된 WayPoint를 추가한다.
-					int nCnt = arrayWayPointTemp.size();
-					for(int k=0; k<nCnt; k++) {
-						arrayWPRoundTrip.add(arrayWayPointTemp.get(k));
-					}
-					arrayWPRoundTrip.addAll(arrayReverse);
-					
-					//기존 waypoint의 "Do Change Speed" 값을 얻어온다.
-					ArrayList<String> arraySpeedsN = new ArrayList<String>();
-					for(int i=0; i<arrayWayPointTemp.size(); i++) {
-						
-						int nIndex = Integer.parseInt(arrayWayPointTemp.get(i));
-						String strKey = arrayMapping.get(nIndex);
-						ArrayList<LinkedHashMap<String, String>> arrayCmds = mapCmdListGroupOut.get(strKey);
-						for(int j=0; j<arrayCmds.size(); j++) {
-							
-							LinkedHashMap<String, String> mapCmd = arrayCmds.get(i);
-							String strCmdCode = mapCmd.get("command");
-							if("178".equals(strCmdCode)) { // "do change speed" Command
-								arraySpeedsN.add(mapCmd.get("param2"));// speed 항목
-								break;
-							}
-							
-						}
-						
-					}
-					
-					// reverse 구간이 된 waypoint "Do Change Speed" 값을 얻어온다.
-					ArrayList<String> arraySpeedsR = new ArrayList<String>();
-					for(int i=0; i<arrayWayPointTemp.size(); i++) {
-						
-						int nIndex = Integer.parseInt(arrayReverse.get(i));
-						String strKey = arrayMapping.get(nIndex);
-						ArrayList<LinkedHashMap<String, String>> arrayCmds = mapCmdListGroupOut.get(strKey);
-						for(int j=0; j<arrayCmds.size(); j++) {
-							
-							LinkedHashMap<String, String> mapCmd = arrayCmds.get(i);
-							String strCmdCode = mapCmd.get("command");
-							if("178".equals(strCmdCode)) { // "do change speed" Command
-								arraySpeedsR.add(mapCmd.get("param2"));// speed 항목
-								break;
-							}
-							
-						}
-						
-					}
-					
-					// 기존 waypoint의 "Head" 값을 얻어온다.
-					ArrayList<String> arrayHeadsN = new ArrayList<String>();
-					for(int i=0; i<arrayWayPointTemp.size(); i++) {
-						
-						int nIndex = Integer.parseInt(arrayWayPointTemp.get(i));
-						String strKey = arrayMapping.get(nIndex);
-						ArrayList<LinkedHashMap<String, String>> arrayCmds = mapCmdListGroupOut.get(strKey);
-						for(int j=0; j<arrayCmds.size(); j++) {
-							
-							LinkedHashMap<String, String> mapCmd = arrayCmds.get(i);
-							String strCmdCode = mapCmd.get("command");
-							if("16".equals(strCmdCode)) { // "waypoint" Command
-								arrayHeadsN.add(mapCmd.get("param4"));// head 항목
-								break;
-							}
-							
-						}
-						
-					}
-					
-					// reverse 구간이 된 waypoint "Head" 값을 얻어온다.
-					ArrayList<String> arrayHeadsR = new ArrayList<String>();
-					for(int i=0; i<arrayWayPointTemp.size(); i++) {
-						
-						int nIndex = Integer.parseInt(arrayReverse.get(i));
-						String strKey = arrayMapping.get(nIndex);
-						ArrayList<LinkedHashMap<String, String>> arrayCmds = mapCmdListGroupOut.get(strKey);
-						for(int j=0; j<arrayCmds.size(); j++) {
-							
-							LinkedHashMap<String, String> mapCmd = arrayCmds.get(i);
-							String strCmdCode = mapCmd.get("command");
-							if("16".equals(strCmdCode)) { // "waypoint" Command
-								arrayHeadsR.add(mapCmd.get("param2"));// head 항목
-								break;
-							}
-							
-						}
-						
-					}
-					
-					// mapping하여 처리된 UI Command를 Drone Command로 풀어 놓는다.
-					ArrayList<LinkedHashMap<String, String>> arrayCmdRoundTripTemp = new ArrayList<LinkedHashMap<String, String>>();
-					for(int i=0; i<arrayWPRoundTrip.size(); i++) {
-						
-						int nIndex = Integer.parseInt(arrayWPRoundTrip.get(i));
-						String strKey = arrayMapping.get(nIndex);
-						ArrayList<LinkedHashMap<String, String>> arrayCmds = mapCmdListGroupOut.get(strKey);
-						arrayCmdRoundTripTemp.addAll(arrayCmds);
-						
-					}
-					
-					// 변환 로직을 적용하여 "Do Change Speed"의 값을 재설정한다.
-					// 변환 로직: round-trip이 기준이 되는 waypoint를 제외한 reverse된 waypoint를 기존 waypoint에 붙여 생성한다.
-					ArrayList<String> arraySpeeds = new ArrayList<String>();
-					arraySpeeds.addAll(arraySpeedsN);
-					arraySpeeds.remove(arraySpeeds.size()-1); // round-trip 기준 waypoint
-					arraySpeeds.addAll(arraySpeedsR);
-					arraySpeeds.add(arraySpeedsR.get(arraySpeedsR.size() -1));
-					
-					// 변환 로직을 적용하여 "Head"의 값을 재설정한다.
-					ArrayList<String> arrayHeads = new ArrayList<String>();
-					arrayHeads.addAll(arrayHeadsN);
-					arrayHeads.remove(arrayHeads.size()-1); // round-trip 기준 waypoint
-					arrayHeads.addAll(arrayHeadsR);
-					arrayHeads.add(arrayHeadsR.get(arrayHeadsR.size() -1));
-					
-					
-					ArrayList<LinkedHashMap<String, String>> arrayCmdRoundTrip = new ArrayList<LinkedHashMap<String, String>>();
-					int nIndexSpeed = 0, nIndexHead = 0, n = 0;
-					for( int i = 0; i<arrayCmdRoundTripTemp.size(); i++) {
-						
-						// 다른 객체에 설정
-						LinkedHashMap<String, String> mapCmd = arrayCmdRoundTripTemp.get(i);
-						LinkedHashMap<String, String> mapNew = new LinkedHashMap<String, String>();
-						
-						for(String strKey2 : mapCmd.keySet()) {
-							
-							if("178".equals(mapCmd.get("command"))) { // "do change speed" Command
-								
-								if("param2".equals(strKey2)) {
-									mapNew.put("param2", arraySpeeds.get(nIndexSpeed)); // "speed" 항목 값 재설정
-									nIndexSpeed++;
-								}else {
-									mapNew.put(strKey2, mapCmd.get(strKey2));
-								}
-								
-							}else if ( "16".equals(mapCmd.get("command")) ) { // "WayPoint" Command
-								
-								if("param4".equals(strKey2)) {
-									
-									mapNew.put("param4", arrayHeads.get(nIndexHead)); // "head" 항목 값 재설정
-									nIndexHead++;
-								}else {
-									mapNew.put(strKey2, mapCmd.get(strKey2));
-								}
-								
-							}
-							
-						}
-						
-						if(!mapNew.isEmpty()) {
-							arrayCmdRoundTrip.add(mapNew);
-						}
-						
-					}
-					
-					arrayRoundTrip.addAll(arrayCmdRoundTrip);
-					
-				}else {
-					// no 왕복 비행
-					
-					// mapping하여 처리된 UI Command를 Drone Command로 풀어 놓는다.
-					ArrayList<LinkedHashMap<String, String>> arrayCmdRoundTrip = new ArrayList<LinkedHashMap<String, String>>();
-					for(int i=0; i<arrayWayPointTemp.size(); i++) {
-						
-						int nIndex = Integer.parseInt(arrayWayPointTemp.get(i));
-						String strKey = arrayMapping.get(nIndex);
-						ArrayList<LinkedHashMap<String, String>> arrayCmds = mapCmdListGroupOut.get(strKey);
-						arrayCmdRoundTrip.addAll(arrayCmds);
-						
-					}
-					
-					arrayRoundTrip.addAll(arrayCmdRoundTrip);
-					
-					
-				}
-				
-				
-				// Repeat 관련
-				
-				int num = 0;
-				if(nCntRepeat <= 0) {
-					arrayRepeat.addAll(arrayRoundTrip);
-				}else {
-					
-					for(int i=0; i<nCntRepeat; i++) {
-						arrayRepeat.addAll(arrayRoundTrip);
-						if(bRoundTrip && i == 0) {
-							arrayRoundTrip.remove(0);
-							
-							for(int j=0; j<arrayRoundTrip.size(); j++) {
-								
-								LinkedHashMap<String, String> roundTripCmd = arrayRoundTrip.get(j);
-								String commandVal = roundTripCmd.get("command");
-								if("16".equals(commandVal)) {
-									break;
-								}
-								num++;
-							}
-							
-							for( int k=0; k<num; k++) {
-								arrayRoundTrip.remove(0);
-							}
-							
-						}
-					}
-					
-				}
-				
-				// TakeOff, Land ( or Return to launch) 기존 Command를 붙여 Command List를 생성한다,
-				
-				// TakeOff Command
-				ArrayList<LinkedHashMap<String, String>> mapTakeOffCmds = new ArrayList<LinkedHashMap<String, String>>();
-				String strkey = arrayMapping.get(0);
-				mapTakeOffCmds = mapCmdListGroupOut.get(strkey);
-				arrayCmdListOut.addAll(mapTakeOffCmds);
-				
-				// Other Command Lists
-				arrayCmdListOut.addAll(arrayRepeat);
-				
-				// Land ( or Return to launch) Command
-				ArrayList<LinkedHashMap<String, String>> mapLandCmds = new ArrayList<LinkedHashMap<String, String>>();
-				String strkey2 = arrayMapping.get(arrayMapping.size() - 1);
-				mapLandCmds = mapCmdListGroupOut.get(strkey2);
-				arrayCmdListOut.addAll(mapLandCmds);
-				
-				
-				// map 자료 구조 -> json String 변환
-				Gson gsonObjA = new GsonBuilder().create();
-				String strCmds = gsonObjA.toJson(arrayCmdListOut);
-				
-				List<LinkedHashMap<String, String>> cmdLst = (List<LinkedHashMap<String, String>>) new Gson().fromJson(strCmds, List.class);
-				// Command parsing
-				List<LinkedHashMap<String, Object>> rslt = new ArrayList<LinkedHashMap<String, Object>>();
-				
-				Map<String, String> attr = null;
-				
-				
-				int no = 1;
-				for(int i=0; i<cmdLst.size(); i++) {
-					Map<String, String> mapCmd = cmdLst.get(i);
-					String strKey = mapCmd.get("command");
-					if("16".equals(strKey)) {
-						mapCmd.put("param3", String.valueOf(no));
-						no++;
-					}
-					
-					attr = attrMap.get(strKey);
-					
-					if(attr == null) {
-						
-						String msg = "CMD_CODE : "+strkey+"(CONVERTING VALUE)";
-						
-						logger.info("code : "+MSMessageReturn.ERR_MDT_PARAM_MISS_CODE+", message : "+MSMessageReturn.ERR_MDT_PARAM_MISS_MSG);
-						msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_MDT_PARAM_MISS_CODE, MSMessageReturn.ERR_MDT_PARAM_MISS_MSG+msg, MSMessageReturn.STAT_ERROR);
-					}
-					
-					Iterator<String> it = mapCmd.keySet().iterator();
-					
-					// change and add to new command list
-					LinkedHashMap<String, Object> newAttr = new LinkedHashMap<String, Object>();
-					while(it.hasNext()) {
-						
-						String key = it.next();
-						String type = attr.get(key);
-						String val = mapCmd.get(key);
-						
-						if("command".equals(key) || "Integer".equals(type)) {
-							
-							if(val == null || "".equals(val)) {
-								
-								String msg = "ATTR/VALUE : "+key+"/"+val+"(CONVERTING VALUE)";
-								
-								logger.info("code : "+MSMessageReturn.ERR_MDT_PARAM_MISS_CODE+", message : "+MSMessageReturn.ERR_MDT_PARAM_MISS_MSG);
-								msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_MDT_PARAM_MISS_CODE, MSMessageReturn.ERR_MDT_PARAM_MISS_MSG+msg, MSMessageReturn.STAT_ERROR);
-								
-							}
-							newAttr.put(key, new Integer(val));
-							
-						}else if("Float".equals(type)) {
-							if(val == null || "".equals(val)) {
-								
-								String msg = "ATTR/VALUE : "+key+"/"+val+"(CONVERTING VALUE)";
-								
-								logger.info("code : "+MSMessageReturn.ERR_MDT_PARAM_MISS_CODE+", message : "+MSMessageReturn.ERR_MDT_PARAM_MISS_MSG);
-								msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_MDT_PARAM_MISS_CODE, MSMessageReturn.ERR_MDT_PARAM_MISS_MSG+msg, MSMessageReturn.STAT_ERROR);
-								
-							}
-							newAttr.put(key, new Double(val));
-						}
-						
-					}
-					rslt.add(newAttr);
-				}
-				
-				String val = new Gson().toJson(rslt);
-				
-				Map<String, JsonArray> result = new LinkedHashMap<>();
-				JsonParser parser2 = new JsonParser();
-				JsonElement elem = parser2.parse(val);
-				JsonArray jsonArrayVal = elem.getAsJsonArray();
-				
-				result.put("commands", jsonArrayVal);
-				
-				
-				System.out.println("result : "+result.toString());
+				Map<String, JsonArray> result = createWaypoints(routingContext, objList, null, null);
 				
 				routingContext.response().putHeader("content-type", "application/json; charset=utf-8")
 				.end(new Gson().toJson(result).replace("\\", ""));
@@ -3233,18 +2742,20 @@ public class MSRoute extends AbstractVerticle {
 		JSONParser parser = new JSONParser();
 		
 		try {
-			//JsonObject json = routingContext.getBodyAsJson();
-			//json.put(ADDR, "getMissionDetail");
+			JsonObject json = routingContext.getBodyAsJson();
+			json.put(ADDR, "getReverseMissionToUpload");
 			
-			String missionId = routingContext.pathParam("mission_id");
-			String compId = routingContext.pathParam("company_id");
+			String missionId = json.getString("mission_id");
+			String compId = json.getString("comp_id");
+			String waypointNum = json.getString("waypoint_num");
+			String direction = json.getString("direction");
 	
 			JSONObject colId = new JSONObject();					
 			colId.put(COL_ID, "2010");
 			colId.put("mission_id", missionId);
 			colId.put("comp_id", compId);
 			
-			System.out.println("getMissionToUpload getMissions : "+colId.toString());
+			System.out.println("getReverseMissionToUpload getMissions : "+colId.toString());
 			
 			//Mission Table Insert
 			Future<JSONObject> fut2 = Future.future(promise -> eb.request("vertx.selectQuery", colId.toString(), reply -> {
@@ -3602,501 +3113,8 @@ public class MSRoute extends AbstractVerticle {
 				
 			}).onSuccess(objList->{
 				
-				JSONObject res = (JSONObject) objList.get(0);
-				LinkedHashMap<String, ArrayList<ArrayList<String>>> mapAttrList = (LinkedHashMap<String, ArrayList<ArrayList<String>>>) objList.get(1);
-				LinkedHashMap<String, ArrayList<ArrayList<String>>> mapDroneAttrList = (LinkedHashMap<String, ArrayList<ArrayList<String>>>) objList.get(2);
-				//LinkedHashMap<String, ArrayList<ArrayList<String>>> mapDroneAttrList2 = (LinkedHashMap<String, ArrayList<ArrayList<String>>>) objList.get(3);
-				LinkedHashMap<String, ArrayList<String>> mapDroneAttrList2 = (LinkedHashMap<String, ArrayList<String>>) objList.get(3);
-				Map<String,Map<String,String>> attrMap = (HashMap<String,Map<String,String>>) objList.get(4);
-				LinkedHashMap<String, ArrayList<String>> mapCmdList = (LinkedHashMap<String, ArrayList<String>>) objList.get(5);
-				//int cmdCodeIdx = (int) objList.get(6);
-								
-				System.out.println("mission res :"+res.toJSONString());
-				System.out.println("mapAttrList res :"+mapAttrList.toString());
-				System.out.println("mapDroneAttrList res :"+mapDroneAttrList.toString());
-				System.out.println("mapDroneAttrList2 res :"+mapDroneAttrList2.toString());
-				System.out.println("mapCmdList res :"+mapCmdList.toString());
-				//System.out.println("cmdCodeIdx res :"+cmdCodeIdx);
 				
-				LinkedHashMap<String, ArrayList<LinkedHashMap<String, String>>> mapCmdListGroupOut = new LinkedHashMap<String, ArrayList<LinkedHashMap<String, String>>>();
-				
-				
-				int wayPointCnt = 0;
-				
-				for(String strKey : mapCmdList.keySet()) {
-					
-					String strCmdId = strKey;
-					String strCmdCode = mapCmdList.get(strCmdId).get(0);//CMD_CODE
-					ArrayList<ArrayList<String>> arrayRows = mapDroneAttrList.get(strCmdCode);
-					
-					// Default_Value 설정
-					LinkedHashMap<String, String> mapCmd = new LinkedHashMap<String, String>();
-					for(int i=0; i<arrayRows.size(); i++ ) {
-						
-						ArrayList<String> arrayRow = arrayRows.get(i);
-						
-						// ATTR_NAME
-						String strAttrName = arrayRow.get(1);
-						if(null == strAttrName) strAttrName = "";
-						
-						// DEFAILT_VALUE
-						String strDefVal = arrayRow.get(6);
-						if(null == strDefVal) strDefVal = "";
-						
-						if( i == 0 ) mapCmd.put("command", strCmdCode);
-						mapCmd.put(strAttrName, strDefVal);
-						
-						
-						if("16".equals(strCmdCode) && "param2".equals(strAttrName)) {
-							mapCmd.put(strAttrName, Integer.toString(++wayPointCnt));							
-						}else {
-							mapCmd.put(strAttrName, strDefVal);
-						}						
-						
-					}
-					
-					LinkedHashMap<String, LinkedHashMap<String, String>> mapCmdListTemp = new LinkedHashMap<String, LinkedHashMap<String, String>>();
-					mapCmdListTemp.put(strCmdCode, mapCmd);
-					
-					ArrayList<ArrayList<String>> arrayUIAttrRows = mapAttrList.get(strCmdId);
-					
-					if(arrayUIAttrRows != null && !arrayUIAttrRows.isEmpty()) {
-						for(int i=0; i<arrayUIAttrRows.size(); i++) {
-							
-							ArrayList<String> arrayUIAttrRow = arrayUIAttrRows.get(i);
-							String strRefAttrCode = arrayUIAttrRow.get(3);// REF_ATTR_CODE 값
-							String strUIAttrValue = arrayUIAttrRow.get(6);// ATTR_VALUE 값
-							
-							if( null == strRefAttrCode || strRefAttrCode.isEmpty() ) continue;
-							
-							ArrayList<String> arrayValues = mapDroneAttrList2.get(strRefAttrCode);
-							String strDroneCmdCode = arrayValues.get(0);// CMD_CODE 값
-							String strDroneAttrName = arrayValues.get(1);// ATTR_NAME 값
-							
-							if(mapCmdListTemp.containsKey(strDroneCmdCode)) {
-								
-								LinkedHashMap<String, String> mapCmdNew = new LinkedHashMap<String, String>();
-								mapCmdNew = mapCmdListTemp.get(strDroneCmdCode);
-								mapCmdNew.put(strDroneAttrName, strUIAttrValue);
-								mapCmdListTemp.put(strDroneCmdCode, mapCmdNew);
-								
-								continue;
-								
-							}else {
-								
-								ArrayList<ArrayList<String>> arrayRowsNew = mapDroneAttrList.get(strDroneCmdCode);
-								LinkedHashMap<String, String> mapCmdNew = new LinkedHashMap<String, String>();
-								for(int j=0; j < arrayRowsNew.size(); j++) {
-								
-									ArrayList<String> arrayRow = arrayRowsNew.get(j);
-									
-									// ATTR_NAME
-									String strAttrName = arrayRow.get(1);
-									if(null == strAttrName) strAttrName = "";
-									
-									// DEFAILT_VALUE
-									String strDefVal = arrayRow.get(6);
-									if(null == strDefVal) strDefVal = "";
-									
-									if( j == 0 ) mapCmdNew.put("command", strDroneCmdCode);
-									mapCmdNew.put(strAttrName, strDefVal);
-									
-								}
-								
-								mapCmdNew.put(strDroneAttrName, strUIAttrValue);
-								mapCmdListTemp.put(strDroneCmdCode, mapCmdNew);
-								
-							}
-							
-						}
-						
-					}
-					
-					ArrayList<LinkedHashMap<String, String>> arrayCmds = new ArrayList<LinkedHashMap<String, String>>();
-					for(String strKeyTemp : mapCmdListTemp.keySet()) {
-						arrayCmds.add(mapCmdListTemp.get(strKeyTemp));												
-					}
-					String strMapKey = strCmdId + "-" + strCmdCode;
-					mapCmdListGroupOut.put(strMapKey, arrayCmds);					
-					
-				}
-				
-				
-				LinkedHashMap<String, String> mapMission = new LinkedHashMap<String, String>();
-				
-				ArrayList<String> resKeys = IteratorUtils.toArrayList(res.keySet().iterator(),res.size());
-				ArrayList<String> resVals = IteratorUtils.toArrayList(res.values().iterator(),res.size());
-								
-				for(int i=0; i<res.size(); i++ ) {
-					mapMission.put(resKeys.get(i), resVals.get(i));
-				}
-				
-				System.out.println("mapMission : "+mapMission.toString());
-				
-				System.out.println("mapCmdListGroupOut : "+mapCmdListGroupOut.toString());
-				
-				
-				int nCntRepeat = 0;
-				String strRepeat = mapMission.get("REPEAT");
-				if(null != strRepeat && !strRepeat.isEmpty()) {
-					nCntRepeat = Integer.parseInt(strRepeat);
-				}
-				
-				boolean bRoundTrip = false;
-				String strRoundTrip = mapMission.get("ROUNDTRIP");
-				if(null != strRoundTrip && !strRoundTrip.isEmpty()) {
-					if("true".equals(strRoundTrip)) bRoundTrip = true;
-				}
-				
-				ArrayList<LinkedHashMap<String, String>> arrayCmdListOut = new ArrayList<LinkedHashMap<String, String>>();
-				ArrayList<LinkedHashMap<String, String>> arrayRoundTrip = new ArrayList<LinkedHashMap<String, String>>();
-				ArrayList<LinkedHashMap<String, String>> arrayRepeat = new ArrayList<LinkedHashMap<String, String>>();
-				
-				ArrayList<String> arrayMapping = new ArrayList<String>();
-				for(String strKey3 : mapCmdListGroupOut.keySet()) {
-					String strUICmdCode = strKey3.substring(strKey3.lastIndexOf("-")+1);
-					arrayMapping.add(strKey3);
-				}
-				
-				ArrayList<String> arrayWayPoints = new ArrayList<String>();
-				ArrayList<String> arrayWPRoundTrip = new ArrayList<String>();
-				ArrayList<String> arrayWPRepeat = new ArrayList<String>();
-				
-				ArrayList<String> arrayWayPointTemp = new ArrayList<String>();
-				
-				for(int i=0; i<arrayMapping.size(); i++) {
-					
-					// strValue( cmd_id + "-" + cmd_code 로 구성됨) ex) "1-22", "2-16", "3-16", .. "5-21"
-					String strValue = arrayMapping.get(i);
-					String strUICmdCode = strValue.substring(strValue.lastIndexOf("-")+1);
-					if("16".equals(strUICmdCode)) arrayWayPointTemp.add(String.valueOf(i));
-				}
-				
-				// RoundTrip 관련
-				
-				if(bRoundTrip) {
-					// mapCmdListGroupOut 키를 기준으로 round-trip 하고, 최종적으로 drone command를 풀어서 기술하는 방법으로 구현
-					// UI Command 리스트에서 마지막 WayPoint를 제회한 부분은 Reverse 하여 기존 WayPoint에 추가하여 RoundTrip을 생성한다.
-					
-					
-					// 마지막 WayPoint는 reverse WayPoint 구간에서 제외하기 위해 "-2"를 함
-					// EX) ""로 묶인 WayPoint들이 reverse 하여 생성된 구간임
-					//     W1 -> W2 -> W3 ==> W1 -> W2 -> W3 -> "W2 -> W1"
-					
-					String strLastWPName = arrayWayPointTemp.get(arrayWayPointTemp.size() - 2);
-					int nLastIndex = arrayWayPointTemp.indexOf(strLastWPName);
-					
-					ArrayList<String> arrayReverse = new ArrayList<String>();
-					for(int j=0; j<=nLastIndex; j++) {
-						arrayReverse.add(arrayWayPointTemp.get(j));
-					}
-					
-					// Reverse 된 WayPoint를 구성한다.
-					Collections.reverse(arrayReverse);
-					
-					// 기존 WayPoint에 Reverse된 WayPoint를 추가한다.
-					int nCnt = arrayWayPointTemp.size();
-					for(int k=0; k<nCnt; k++) {
-						arrayWPRoundTrip.add(arrayWayPointTemp.get(k));
-					}
-					arrayWPRoundTrip.addAll(arrayReverse);
-					
-					//기존 waypoint의 "Do Change Speed" 값을 얻어온다.
-					ArrayList<String> arraySpeedsN = new ArrayList<String>();
-					for(int i=0; i<arrayWayPointTemp.size(); i++) {
-						
-						int nIndex = Integer.parseInt(arrayWayPointTemp.get(i));
-						String strKey = arrayMapping.get(nIndex);
-						ArrayList<LinkedHashMap<String, String>> arrayCmds = mapCmdListGroupOut.get(strKey);
-						for(int j=0; j<arrayCmds.size(); j++) {
-							
-							LinkedHashMap<String, String> mapCmd = arrayCmds.get(i);
-							String strCmdCode = mapCmd.get("command");
-							if("178".equals(strCmdCode)) { // "do change speed" Command
-								arraySpeedsN.add(mapCmd.get("param2"));// speed 항목
-								break;
-							}
-							
-						}
-						
-					}
-					
-					// reverse 구간이 된 waypoint "Do Change Speed" 값을 얻어온다.
-					ArrayList<String> arraySpeedsR = new ArrayList<String>();
-					for(int i=0; i<arrayWayPointTemp.size(); i++) {
-						
-						int nIndex = Integer.parseInt(arrayReverse.get(i));
-						String strKey = arrayMapping.get(nIndex);
-						ArrayList<LinkedHashMap<String, String>> arrayCmds = mapCmdListGroupOut.get(strKey);
-						for(int j=0; j<arrayCmds.size(); j++) {
-							
-							LinkedHashMap<String, String> mapCmd = arrayCmds.get(i);
-							String strCmdCode = mapCmd.get("command");
-							if("178".equals(strCmdCode)) { // "do change speed" Command
-								arraySpeedsR.add(mapCmd.get("param2"));// speed 항목
-								break;
-							}
-							
-						}
-						
-					}
-					
-					// 기존 waypoint의 "Head" 값을 얻어온다.
-					ArrayList<String> arrayHeadsN = new ArrayList<String>();
-					for(int i=0; i<arrayWayPointTemp.size(); i++) {
-						
-						int nIndex = Integer.parseInt(arrayWayPointTemp.get(i));
-						String strKey = arrayMapping.get(nIndex);
-						ArrayList<LinkedHashMap<String, String>> arrayCmds = mapCmdListGroupOut.get(strKey);
-						for(int j=0; j<arrayCmds.size(); j++) {
-							
-							LinkedHashMap<String, String> mapCmd = arrayCmds.get(i);
-							String strCmdCode = mapCmd.get("command");
-							if("16".equals(strCmdCode)) { // "waypoint" Command
-								arrayHeadsN.add(mapCmd.get("param4"));// head 항목
-								break;
-							}
-							
-						}
-						
-					}
-					
-					// reverse 구간이 된 waypoint "Head" 값을 얻어온다.
-					ArrayList<String> arrayHeadsR = new ArrayList<String>();
-					for(int i=0; i<arrayWayPointTemp.size(); i++) {
-						
-						int nIndex = Integer.parseInt(arrayReverse.get(i));
-						String strKey = arrayMapping.get(nIndex);
-						ArrayList<LinkedHashMap<String, String>> arrayCmds = mapCmdListGroupOut.get(strKey);
-						for(int j=0; j<arrayCmds.size(); j++) {
-							
-							LinkedHashMap<String, String> mapCmd = arrayCmds.get(i);
-							String strCmdCode = mapCmd.get("command");
-							if("16".equals(strCmdCode)) { // "waypoint" Command
-								arrayHeadsR.add(mapCmd.get("param2"));// head 항목
-								break;
-							}
-							
-						}
-						
-					}
-					
-					// mapping하여 처리된 UI Command를 Drone Command로 풀어 놓는다.
-					ArrayList<LinkedHashMap<String, String>> arrayCmdRoundTripTemp = new ArrayList<LinkedHashMap<String, String>>();
-					for(int i=0; i<arrayWPRoundTrip.size(); i++) {
-						
-						int nIndex = Integer.parseInt(arrayWPRoundTrip.get(i));
-						String strKey = arrayMapping.get(nIndex);
-						ArrayList<LinkedHashMap<String, String>> arrayCmds = mapCmdListGroupOut.get(strKey);
-						arrayCmdRoundTripTemp.addAll(arrayCmds);
-						
-					}
-					
-					// 변환 로직을 적용하여 "Do Change Speed"의 값을 재설정한다.
-					// 변환 로직: round-trip이 기준이 되는 waypoint를 제외한 reverse된 waypoint를 기존 waypoint에 붙여 생성한다.
-					ArrayList<String> arraySpeeds = new ArrayList<String>();
-					arraySpeeds.addAll(arraySpeedsN);
-					arraySpeeds.remove(arraySpeeds.size()-1); // round-trip 기준 waypoint
-					arraySpeeds.addAll(arraySpeedsR);
-					arraySpeeds.add(arraySpeedsR.get(arraySpeedsR.size() -1));
-					
-					// 변환 로직을 적용하여 "Head"의 값을 재설정한다.
-					ArrayList<String> arrayHeads = new ArrayList<String>();
-					arrayHeads.addAll(arrayHeadsN);
-					arrayHeads.remove(arrayHeads.size()-1); // round-trip 기준 waypoint
-					arrayHeads.addAll(arrayHeadsR);
-					arrayHeads.add(arrayHeadsR.get(arrayHeadsR.size() -1));
-					
-					
-					ArrayList<LinkedHashMap<String, String>> arrayCmdRoundTrip = new ArrayList<LinkedHashMap<String, String>>();
-					int nIndexSpeed = 0, nIndexHead = 0, n = 0;
-					for( int i = 0; i<arrayCmdRoundTripTemp.size(); i++) {
-						
-						// 다른 객체에 설정
-						LinkedHashMap<String, String> mapCmd = arrayCmdRoundTripTemp.get(i);
-						LinkedHashMap<String, String> mapNew = new LinkedHashMap<String, String>();
-						
-						for(String strKey2 : mapCmd.keySet()) {
-							
-							if("178".equals(mapCmd.get("command"))) { // "do change speed" Command
-								
-								if("param2".equals(strKey2)) {
-									mapNew.put("param2", arraySpeeds.get(nIndexSpeed)); // "speed" 항목 값 재설정
-									nIndexSpeed++;
-								}else {
-									mapNew.put(strKey2, mapCmd.get(strKey2));
-								}
-								
-							}else if ( "16".equals(mapCmd.get("command")) ) { // "WayPoint" Command
-								
-								if("param4".equals(strKey2)) {
-									
-									mapNew.put("param4", arrayHeads.get(nIndexHead)); // "head" 항목 값 재설정
-									nIndexHead++;
-								}else {
-									mapNew.put(strKey2, mapCmd.get(strKey2));
-								}
-								
-							}
-							
-						}
-						
-						if(!mapNew.isEmpty()) {
-							arrayCmdRoundTrip.add(mapNew);
-						}
-						
-					}
-					
-					arrayRoundTrip.addAll(arrayCmdRoundTrip);
-					
-				}else {
-					// no 왕복 비행
-					
-					// mapping하여 처리된 UI Command를 Drone Command로 풀어 놓는다.
-					ArrayList<LinkedHashMap<String, String>> arrayCmdRoundTrip = new ArrayList<LinkedHashMap<String, String>>();
-					for(int i=0; i<arrayWayPointTemp.size(); i++) {
-						
-						int nIndex = Integer.parseInt(arrayWayPointTemp.get(i));
-						String strKey = arrayMapping.get(nIndex);
-						ArrayList<LinkedHashMap<String, String>> arrayCmds = mapCmdListGroupOut.get(strKey);
-						arrayCmdRoundTrip.addAll(arrayCmds);
-						
-					}
-					
-					arrayRoundTrip.addAll(arrayCmdRoundTrip);
-					
-					
-				}
-				
-				
-				// Repeat 관련
-				
-				int num = 0;
-				if(nCntRepeat <= 0) {
-					arrayRepeat.addAll(arrayRoundTrip);
-				}else {
-					
-					for(int i=0; i<nCntRepeat; i++) {
-						arrayRepeat.addAll(arrayRoundTrip);
-						if(bRoundTrip && i == 0) {
-							arrayRoundTrip.remove(0);
-							
-							for(int j=0; j<arrayRoundTrip.size(); j++) {
-								
-								LinkedHashMap<String, String> roundTripCmd = arrayRoundTrip.get(j);
-								String commandVal = roundTripCmd.get("command");
-								if("16".equals(commandVal)) {
-									break;
-								}
-								num++;
-							}
-							
-							for( int k=0; k<num; k++) {
-								arrayRoundTrip.remove(0);
-							}
-							
-						}
-					}
-					
-				}
-				
-				// TakeOff, Land ( or Return to launch) 기존 Command를 붙여 Command List를 생성한다,
-				
-				// TakeOff Command
-				ArrayList<LinkedHashMap<String, String>> mapTakeOffCmds = new ArrayList<LinkedHashMap<String, String>>();
-				String strkey = arrayMapping.get(0);
-				mapTakeOffCmds = mapCmdListGroupOut.get(strkey);
-				arrayCmdListOut.addAll(mapTakeOffCmds);
-				
-				// Other Command Lists
-				arrayCmdListOut.addAll(arrayRepeat);
-				
-				// Land ( or Return to launch) Command
-				ArrayList<LinkedHashMap<String, String>> mapLandCmds = new ArrayList<LinkedHashMap<String, String>>();
-				String strkey2 = arrayMapping.get(arrayMapping.size() - 1);
-				mapLandCmds = mapCmdListGroupOut.get(strkey2);
-				arrayCmdListOut.addAll(mapLandCmds);
-				
-				
-				// map 자료 구조 -> json String 변환
-				Gson gsonObjA = new GsonBuilder().create();
-				String strCmds = gsonObjA.toJson(arrayCmdListOut);
-				
-				List<LinkedHashMap<String, String>> cmdLst = (List<LinkedHashMap<String, String>>) new Gson().fromJson(strCmds, List.class);
-				// Command parsing
-				List<LinkedHashMap<String, Object>> rslt = new ArrayList<LinkedHashMap<String, Object>>();
-				
-				Map<String, String> attr = null;
-				
-				
-				int no = 1;
-				for(int i=0; i<cmdLst.size(); i++) {
-					Map<String, String> mapCmd = cmdLst.get(i);
-					String strKey = mapCmd.get("command");
-					if("16".equals(strKey)) {
-						mapCmd.put("param3", String.valueOf(no));
-						no++;
-					}
-					
-					attr = attrMap.get(strKey);
-					
-					if(attr == null) {
-						
-						String msg = "CMD_CODE : "+strkey+"(CONVERTING VALUE)";
-						
-						logger.info("code : "+MSMessageReturn.ERR_MDT_PARAM_MISS_CODE+", message : "+MSMessageReturn.ERR_MDT_PARAM_MISS_MSG);
-						msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_MDT_PARAM_MISS_CODE, MSMessageReturn.ERR_MDT_PARAM_MISS_MSG+msg, MSMessageReturn.STAT_ERROR);
-					}
-					
-					Iterator<String> it = mapCmd.keySet().iterator();
-					
-					// change and add to new command list
-					LinkedHashMap<String, Object> newAttr = new LinkedHashMap<String, Object>();
-					while(it.hasNext()) {
-						
-						String key = it.next();
-						String type = attr.get(key);
-						String val = mapCmd.get(key);
-						
-						if("command".equals(key) || "Integer".equals(type)) {
-							
-							if(val == null || "".equals(val)) {
-								
-								String msg = "ATTR/VALUE : "+key+"/"+val+"(CONVERTING VALUE)";
-								
-								logger.info("code : "+MSMessageReturn.ERR_MDT_PARAM_MISS_CODE+", message : "+MSMessageReturn.ERR_MDT_PARAM_MISS_MSG);
-								msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_MDT_PARAM_MISS_CODE, MSMessageReturn.ERR_MDT_PARAM_MISS_MSG+msg, MSMessageReturn.STAT_ERROR);
-								
-							}
-							newAttr.put(key, new Integer(val));
-							
-						}else if("Float".equals(type)) {
-							if(val == null || "".equals(val)) {
-								
-								String msg = "ATTR/VALUE : "+key+"/"+val+"(CONVERTING VALUE)";
-								
-								logger.info("code : "+MSMessageReturn.ERR_MDT_PARAM_MISS_CODE+", message : "+MSMessageReturn.ERR_MDT_PARAM_MISS_MSG);
-								msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_MDT_PARAM_MISS_CODE, MSMessageReturn.ERR_MDT_PARAM_MISS_MSG+msg, MSMessageReturn.STAT_ERROR);
-								
-							}
-							newAttr.put(key, new Double(val));
-						}
-						
-					}
-					rslt.add(newAttr);
-				}
-				
-				String val = new Gson().toJson(rslt);
-				
-				Map<String, JsonArray> result = new LinkedHashMap<>();
-				JsonParser parser2 = new JsonParser();
-				JsonElement elem = parser2.parse(val);
-				JsonArray jsonArrayVal = elem.getAsJsonArray();
-				
-				result.put("commands", jsonArrayVal);
-				
-				
-				System.out.println("result : "+result.toString());
+				Map<String, JsonArray> result = createWaypoints(routingContext, objList, direction, waypointNum);
 				
 				routingContext.response().putHeader("content-type", "application/json; charset=utf-8")
 				.end(new Gson().toJson(result).replace("\\", ""));
@@ -5351,5 +4369,827 @@ public class MSRoute extends AbstractVerticle {
 			}
 			
 		}));
+	}
+	
+	private Map<String, JsonArray> createWaypoints(RoutingContext routingContext, List<Object> objList, String direction, String waypointNum) {
+		
+		JSONObject res = (JSONObject) objList.get(0);
+		LinkedHashMap<String, ArrayList<ArrayList<String>>> mapAttrList = (LinkedHashMap<String, ArrayList<ArrayList<String>>>) objList.get(1);
+		LinkedHashMap<String, ArrayList<ArrayList<String>>> mapDroneAttrList = (LinkedHashMap<String, ArrayList<ArrayList<String>>>) objList.get(2);
+		//LinkedHashMap<String, ArrayList<ArrayList<String>>> mapDroneAttrList2 = (LinkedHashMap<String, ArrayList<ArrayList<String>>>) objList.get(3);
+		LinkedHashMap<String, ArrayList<String>> mapDroneAttrList2 = (LinkedHashMap<String, ArrayList<String>>) objList.get(3);
+		Map<String,Map<String,String>> attrMap = (HashMap<String,Map<String,String>>) objList.get(4);
+		LinkedHashMap<String, ArrayList<String>> mapCmdList = (LinkedHashMap<String, ArrayList<String>>) objList.get(5);
+		//int cmdCodeIdx = (int) objList.get(6);
+						
+		System.out.println("mission res :"+res.toJSONString());
+		System.out.println("mapAttrList res :"+mapAttrList.toString());
+		System.out.println("mapDroneAttrList res :"+mapDroneAttrList.toString());
+		System.out.println("mapDroneAttrList2 res :"+mapDroneAttrList2.toString());
+		System.out.println("mapCmdList res :"+mapCmdList.toString());
+		//System.out.println("cmdCodeIdx res :"+cmdCodeIdx);
+		
+		LinkedHashMap<String, ArrayList<LinkedHashMap<String, String>>> mapCmdListGroupOut = new LinkedHashMap<String, ArrayList<LinkedHashMap<String, String>>>();
+		
+		
+		int wayPointCnt = 0;
+		
+		for(String strKey : mapCmdList.keySet()) {
+			
+			String strCmdId = strKey;
+			String strCmdCode = mapCmdList.get(strCmdId).get(0);//CMD_CODE
+			ArrayList<ArrayList<String>> arrayRows = mapDroneAttrList.get(strCmdCode);
+			
+			// Default_Value 설정
+			LinkedHashMap<String, String> mapCmd = new LinkedHashMap<String, String>();
+			for(int i=0; i<arrayRows.size(); i++ ) {
+				
+				ArrayList<String> arrayRow = arrayRows.get(i);
+				
+				// ATTR_NAME
+				String strAttrName = arrayRow.get(1);
+				if(null == strAttrName) strAttrName = "";
+				
+				// DEFAILT_VALUE
+				String strDefVal = arrayRow.get(6);
+				if(null == strDefVal) strDefVal = "";
+				
+				if( i == 0 ) mapCmd.put("command", strCmdCode);
+				mapCmd.put(strAttrName, strDefVal);
+				
+				
+				if("16".equals(strCmdCode) && "param2".equals(strAttrName)) {
+					mapCmd.put(strAttrName, Integer.toString(++wayPointCnt));							
+				}else {
+					mapCmd.put(strAttrName, strDefVal);
+				}						
+				
+			}
+			
+			LinkedHashMap<String, LinkedHashMap<String, String>> mapCmdListTemp = new LinkedHashMap<String, LinkedHashMap<String, String>>();
+			mapCmdListTemp.put(strCmdCode, mapCmd);
+			
+			ArrayList<ArrayList<String>> arrayUIAttrRows = mapAttrList.get(strCmdId);
+			
+			if(arrayUIAttrRows != null && !arrayUIAttrRows.isEmpty()) {
+				for(int i=0; i<arrayUIAttrRows.size(); i++) {
+					
+					ArrayList<String> arrayUIAttrRow = arrayUIAttrRows.get(i);
+					String strRefAttrCode = arrayUIAttrRow.get(3);// REF_ATTR_CODE 값
+					String strUIAttrValue = arrayUIAttrRow.get(6);// ATTR_VALUE 값
+					
+					if( null == strRefAttrCode || strRefAttrCode.isEmpty() ) continue;
+					
+					ArrayList<String> arrayValues = mapDroneAttrList2.get(strRefAttrCode);
+					String strDroneCmdCode = arrayValues.get(0);// CMD_CODE 값
+					String strDroneAttrName = arrayValues.get(1);// ATTR_NAME 값
+					
+					if(mapCmdListTemp.containsKey(strDroneCmdCode)) {
+						
+						LinkedHashMap<String, String> mapCmdNew = new LinkedHashMap<String, String>();
+						mapCmdNew = mapCmdListTemp.get(strDroneCmdCode);
+						mapCmdNew.put(strDroneAttrName, strUIAttrValue);
+						mapCmdListTemp.put(strDroneCmdCode, mapCmdNew);
+						
+						continue;
+						
+					}else {
+						
+						ArrayList<ArrayList<String>> arrayRowsNew = mapDroneAttrList.get(strDroneCmdCode);
+						LinkedHashMap<String, String> mapCmdNew = new LinkedHashMap<String, String>();
+						for(int j=0; j < arrayRowsNew.size(); j++) {
+						
+							ArrayList<String> arrayRow = arrayRowsNew.get(j);
+							
+							// ATTR_NAME
+							String strAttrName = arrayRow.get(1);
+							if(null == strAttrName) strAttrName = "";
+							
+							// DEFAILT_VALUE
+							String strDefVal = arrayRow.get(6);
+							if(null == strDefVal) strDefVal = "";
+							
+							if( j == 0 ) mapCmdNew.put("command", strDroneCmdCode);
+							mapCmdNew.put(strAttrName, strDefVal);
+							
+						}
+						
+						mapCmdNew.put(strDroneAttrName, strUIAttrValue);
+						mapCmdListTemp.put(strDroneCmdCode, mapCmdNew);
+						
+					}
+					
+				}
+				
+			}
+			
+			ArrayList<LinkedHashMap<String, String>> arrayCmds = new ArrayList<LinkedHashMap<String, String>>();
+			for(String strKeyTemp : mapCmdListTemp.keySet()) {
+				arrayCmds.add(mapCmdListTemp.get(strKeyTemp));												
+			}
+			String strMapKey = strCmdId + "-" + strCmdCode;
+			mapCmdListGroupOut.put(strMapKey, arrayCmds);					
+			
+		}
+		
+		
+		LinkedHashMap<String, String> mapMission = new LinkedHashMap<String, String>();
+		
+		ArrayList<String> resKeys = IteratorUtils.toArrayList(res.keySet().iterator(),res.size());
+		ArrayList<String> resVals = IteratorUtils.toArrayList(res.values().iterator(),res.size());
+						
+		for(int i=0; i<res.size(); i++ ) {
+			mapMission.put(resKeys.get(i), resVals.get(i));
+		}
+		
+		System.out.println("mapMission : "+mapMission.toString());
+		
+		System.out.println("mapCmdListGroupOut : "+mapCmdListGroupOut.toString());
+		
+		
+		int nCntRepeat = 0;
+		String strRepeat = mapMission.get("REPEAT");
+		if(null != strRepeat && !strRepeat.isEmpty()) {
+			nCntRepeat = Integer.parseInt(strRepeat);
+		}
+		
+		boolean bRoundTrip = false;
+		String strRoundTrip = mapMission.get("ROUNDTRIP");
+		if(null != strRoundTrip && !strRoundTrip.isEmpty()) {
+			if("true".equals(strRoundTrip)) bRoundTrip = true;
+		}
+		
+		ArrayList<LinkedHashMap<String, String>> arrayCmdListOut = new ArrayList<LinkedHashMap<String, String>>();
+		ArrayList<LinkedHashMap<String, String>> arrayRoundTrip = new ArrayList<LinkedHashMap<String, String>>();
+		ArrayList<LinkedHashMap<String, String>> arrayRepeat = new ArrayList<LinkedHashMap<String, String>>();
+		
+		ArrayList<String> arrayMapping = new ArrayList<String>();
+		for(String strKey3 : mapCmdListGroupOut.keySet()) {
+			String strUICmdCode = strKey3.substring(strKey3.lastIndexOf("-")+1);
+			arrayMapping.add(strKey3);
+		}
+		
+		ArrayList<String> arrayWayPoints = new ArrayList<String>();
+		ArrayList<String> arrayWPRoundTrip = new ArrayList<String>();
+		ArrayList<String> arrayWPRepeat = new ArrayList<String>();
+		
+		ArrayList<String> arrayWayPointTemp = new ArrayList<String>();
+		
+		for(int i=0; i<arrayMapping.size(); i++) {
+			
+			// strValue( cmd_id + "-" + cmd_code 로 구성됨) ex) "1-22", "2-16", "3-16", .. "5-21"
+			String strValue = arrayMapping.get(i);
+			String strUICmdCode = strValue.substring(strValue.lastIndexOf("-")+1);
+			if("16".equals(strUICmdCode)) arrayWayPointTemp.add(String.valueOf(i));
+		}
+		
+		// RoundTrip 관련
+		
+		if(bRoundTrip) {
+			// mapCmdListGroupOut 키를 기준으로 round-trip 하고, 최종적으로 drone command를 풀어서 기술하는 방법으로 구현
+			// UI Command 리스트에서 마지막 WayPoint를 제회한 부분은 Reverse 하여 기존 WayPoint에 추가하여 RoundTrip을 생성한다.
+			
+			
+			// 마지막 WayPoint는 reverse WayPoint 구간에서 제외하기 위해 "-2"를 함
+			// EX) ""로 묶인 WayPoint들이 reverse 하여 생성된 구간임
+			//     W1 -> W2 -> W3 ==> W1 -> W2 -> W3 -> "W2 -> W1"
+			
+			String strLastWPName = arrayWayPointTemp.get(arrayWayPointTemp.size() - 2);
+			int nLastIndex = arrayWayPointTemp.indexOf(strLastWPName);
+			
+			ArrayList<String> arrayReverse = new ArrayList<String>();
+			for(int j=0; j<=nLastIndex; j++) {
+				arrayReverse.add(arrayWayPointTemp.get(j));
+			}
+			
+			// Reverse 된 WayPoint를 구성한다.
+			Collections.reverse(arrayReverse);
+			
+			// 기존 WayPoint에 Reverse된 WayPoint를 추가한다.
+			int nCnt = arrayWayPointTemp.size();
+			for(int k=0; k<nCnt; k++) {
+				arrayWPRoundTrip.add(arrayWayPointTemp.get(k));
+			}
+			arrayWPRoundTrip.addAll(arrayReverse);
+			
+			//기존 waypoint의 "Do Change Speed" 값을 얻어온다.
+			ArrayList<String> arraySpeedsN = new ArrayList<String>();
+			for(int i=0; i<arrayWayPointTemp.size(); i++) {
+				
+				int nIndex = Integer.parseInt(arrayWayPointTemp.get(i));
+				String strKey = arrayMapping.get(nIndex);
+				ArrayList<LinkedHashMap<String, String>> arrayCmds = mapCmdListGroupOut.get(strKey);
+				for(int j=0; j<arrayCmds.size(); j++) {
+					
+					LinkedHashMap<String, String> mapCmd = arrayCmds.get(j);
+					String strCmdCode = mapCmd.get("command");
+					if("178".equals(strCmdCode)) { // "do change speed" Command
+						arraySpeedsN.add(mapCmd.get("param2"));// speed 항목
+						break;
+					}
+					
+				}
+				
+			}
+			
+			// reverse 구간이 된 waypoint "Do Change Speed" 값을 얻어온다.
+			ArrayList<String> arraySpeedsR = new ArrayList<String>();
+			for(int i=0; i<arrayReverse.size(); i++) {
+				
+				int nIndex = Integer.parseInt(arrayReverse.get(i));
+				String strKey = arrayMapping.get(nIndex);
+				ArrayList<LinkedHashMap<String, String>> arrayCmds = mapCmdListGroupOut.get(strKey);
+				for(int j=0; j<arrayCmds.size(); j++) {
+					
+					LinkedHashMap<String, String> mapCmd = arrayCmds.get(j);
+					String strCmdCode = mapCmd.get("command");
+					if("178".equals(strCmdCode)) { // "do change speed" Command
+						arraySpeedsR.add(mapCmd.get("param2"));// speed 항목
+						break;
+					}
+					
+				}
+				
+			}
+			
+			// 기존 waypoint의 "Head" 값을 얻어온다.
+			ArrayList<String> arrayHeadsN = new ArrayList<String>();
+			for(int i=0; i<arrayWayPointTemp.size(); i++) {
+				
+				int nIndex = Integer.parseInt(arrayWayPointTemp.get(i));
+				String strKey = arrayMapping.get(nIndex);
+				ArrayList<LinkedHashMap<String, String>> arrayCmds = mapCmdListGroupOut.get(strKey);
+				for(int j=0; j<arrayCmds.size(); j++) {
+					
+					LinkedHashMap<String, String> mapCmd = arrayCmds.get(j);
+					String strCmdCode = mapCmd.get("command");
+					if("16".equals(strCmdCode)) { // "waypoint" Command
+						arrayHeadsN.add(mapCmd.get("param4"));// head 항목
+						break;
+					}
+					
+				}
+				
+			}
+			
+			// reverse 구간이 된 waypoint "Head" 값을 얻어온다.
+			ArrayList<String> arrayHeadsR = new ArrayList<String>();
+			for(int i=0; i<arrayReverse.size(); i++) {
+				
+				int nIndex = Integer.parseInt(arrayReverse.get(i));
+				String strKey = arrayMapping.get(nIndex);
+				ArrayList<LinkedHashMap<String, String>> arrayCmds = mapCmdListGroupOut.get(strKey);
+				for(int j=0; j<arrayCmds.size(); j++) {
+					
+					LinkedHashMap<String, String> mapCmd = arrayCmds.get(j);
+					String strCmdCode = mapCmd.get("command");
+					if("16".equals(strCmdCode)) { // "waypoint" Command
+						arrayHeadsR.add(mapCmd.get("param4"));// head 항목
+						break;
+					}
+					
+				}
+				
+			}
+			
+			// mapping하여 처리된 UI Command를 Drone Command로 풀어 놓는다.
+			ArrayList<LinkedHashMap<String, String>> arrayCmdRoundTripTemp = new ArrayList<LinkedHashMap<String, String>>();
+			for(int i=0; i<arrayWPRoundTrip.size(); i++) {
+				
+				int nIndex = Integer.parseInt(arrayWPRoundTrip.get(i));
+				String strKey = arrayMapping.get(nIndex);
+				ArrayList<LinkedHashMap<String, String>> arrayCmds = mapCmdListGroupOut.get(strKey);
+				arrayCmdRoundTripTemp.addAll(arrayCmds);
+				
+			}
+			
+			// 변환 로직을 적용하여 "Do Change Speed"의 값을 재설정한다.
+			// 변환 로직: round-trip이 기준이 되는 waypoint를 제외한 reverse된 waypoint를 기존 waypoint에 붙여 생성한다.
+			ArrayList<String> arraySpeeds = new ArrayList<String>();
+			arraySpeeds.addAll(arraySpeedsN);
+			arraySpeeds.remove(arraySpeeds.size()-1); // round-trip 기준 waypoint
+			arraySpeeds.addAll(arraySpeedsR);
+			arraySpeeds.add(arraySpeedsR.get(arraySpeedsR.size() -1));
+			
+			// 변환 로직을 적용하여 "Head"의 값을 재설정한다.
+			ArrayList<String> arrayHeads = new ArrayList<String>();
+			arrayHeads.addAll(arrayHeadsN);
+			arrayHeads.remove(arrayHeads.size()-1); // round-trip 기준 waypoint
+			arrayHeads.addAll(arrayHeadsR);
+			arrayHeads.add(arrayHeadsR.get(arrayHeadsR.size() -1));
+			
+			
+			ArrayList<LinkedHashMap<String, String>> arrayCmdRoundTrip = new ArrayList<LinkedHashMap<String, String>>();
+			int nIndexSpeed = 0, nIndexHead = 0, n = 0;
+			for( int i = 0; i<arrayCmdRoundTripTemp.size(); i++) {
+				
+				// 다른 객체에 설정
+				LinkedHashMap<String, String> mapCmd = arrayCmdRoundTripTemp.get(i);
+				LinkedHashMap<String, String> mapNew = new LinkedHashMap<String, String>();
+				
+				for(String strKey2 : mapCmd.keySet()) {
+					
+					if("178".equals(mapCmd.get("command"))) { // "do change speed" Command
+						
+						if("param2".equals(strKey2)) {
+							mapNew.put("param2", arraySpeeds.get(nIndexSpeed)); // "speed" 항목 값 재설정
+							nIndexSpeed++;
+						}else {
+							mapNew.put(strKey2, mapCmd.get(strKey2));
+						}
+						
+					}else if ( "16".equals(mapCmd.get("command")) ) { // "WayPoint" Command
+						
+						if("param4".equals(strKey2)) {
+							
+							mapNew.put("param4", arrayHeads.get(nIndexHead)); // "head" 항목 값 재설정
+							
+							// 역방향 head 재설정
+							if(direction != null) {
+								if("-1".equals(direction)) {
+									if(n > 0) {
+										nIndexHead++;
+									}
+									if(nIndexHead == 0 && n == 0) {
+										n++;
+									}
+									
+								}else {
+									nIndexHead++;
+								}
+							}else {
+								nIndexHead++;
+							}
+							
+						}else {
+							mapNew.put(strKey2, mapCmd.get(strKey2));
+						}
+						
+					}
+					
+				}
+				
+				if(!mapNew.isEmpty()) {
+					arrayCmdRoundTrip.add(mapNew);
+				}
+				
+			}
+			
+			arrayRoundTrip.addAll(arrayCmdRoundTrip);
+			
+		}else {
+			// no 왕복 비행
+			
+			// 역방향 head 재설정
+			if(direction != null) {
+				if("-1".equals(direction)) {
+					
+					// mapping하여 처리된 UI Command를 Drone Command로 풀어 놓는다.
+					ArrayList<LinkedHashMap<String, String>> arrayCmdRoundTrip = new ArrayList<LinkedHashMap<String, String>>();
+					for(int i=0; i<arrayWayPointTemp.size(); i++) {
+						
+						int nIndex = Integer.parseInt(arrayWayPointTemp.get(i));
+						String strKey = arrayMapping.get(nIndex);
+						ArrayList<LinkedHashMap<String, String>> arrayCmds = mapCmdListGroupOut.get(strKey);
+						arrayCmdRoundTrip.addAll(arrayCmds);
+						
+					}
+					
+					arrayRoundTrip.addAll(arrayCmdRoundTrip);
+					
+				}else {
+					
+					String strLastWPName = arrayWayPointTemp.get(arrayWayPointTemp.size() - 2);
+					int nLastIndex = arrayWayPointTemp.indexOf(strLastWPName);
+					
+					ArrayList<String> arrayReverse = new ArrayList<String>();
+					for(int j=0; j<=nLastIndex; j++) {
+						arrayReverse.add(arrayWayPointTemp.get(j));
+					}
+										
+					// 기존 WayPoint에 WayPoint를 추가한다.
+					int nCnt = arrayWayPointTemp.size();
+					for(int k=0; k<nCnt; k++) {
+						arrayWPRoundTrip.add(arrayWayPointTemp.get(k));
+					}					
+					
+					//기존 waypoint의 "Do Change Speed" 값을 얻어온다.
+					ArrayList<String> arraySpeedsN = new ArrayList<String>();
+					for(int i=0; i<arrayWayPointTemp.size(); i++) {
+						
+						int nIndex = Integer.parseInt(arrayWayPointTemp.get(i));
+						String strKey = arrayMapping.get(nIndex);
+						ArrayList<LinkedHashMap<String, String>> arrayCmds = mapCmdListGroupOut.get(strKey);
+						for(int j=0; j<arrayCmds.size(); j++) {
+							
+							LinkedHashMap<String, String> mapCmd = arrayCmds.get(j);
+							String strCmdCode = mapCmd.get("command");
+							if("178".equals(strCmdCode)) { // "do change speed" Command
+								arraySpeedsN.add(mapCmd.get("param2"));// speed 항목
+								break;
+							}
+							
+						}
+						
+					}
+					
+					// reverse 구간이 된 waypoint "Do Change Speed" 값을 얻어온다.
+					ArrayList<String> arraySpeedsR = new ArrayList<String>();
+					for(int i=0; i<arrayReverse.size(); i++) {
+						
+						int nIndex = Integer.parseInt(arrayReverse.get(i));
+						String strKey = arrayMapping.get(nIndex);
+						ArrayList<LinkedHashMap<String, String>> arrayCmds = mapCmdListGroupOut.get(strKey);
+						for(int j=0; j<arrayCmds.size(); j++) {
+							
+							LinkedHashMap<String, String> mapCmd = arrayCmds.get(j);
+							String strCmdCode = mapCmd.get("command");
+							if("178".equals(strCmdCode)) { // "do change speed" Command
+								arraySpeedsR.add(mapCmd.get("param2"));// speed 항목
+								break;
+							}
+							
+						}
+						
+					}
+					
+					// 기존 waypoint의 "Head" 값을 얻어온다.
+					ArrayList<String> arrayHeadsN = new ArrayList<String>();
+					for(int i=0; i<arrayWayPointTemp.size(); i++) {
+						
+						int nIndex = Integer.parseInt(arrayWayPointTemp.get(i));
+						String strKey = arrayMapping.get(nIndex);
+						ArrayList<LinkedHashMap<String, String>> arrayCmds = mapCmdListGroupOut.get(strKey);
+						for(int j=0; j<arrayCmds.size(); j++) {
+							
+							LinkedHashMap<String, String> mapCmd = arrayCmds.get(j);
+							String strCmdCode = mapCmd.get("command");
+							if("16".equals(strCmdCode)) { // "waypoint" Command
+								arrayHeadsN.add(mapCmd.get("param4"));// head 항목
+								break;
+							}
+							
+						}
+						
+					}
+					
+					// reverse 구간이 된 waypoint "Head" 값을 얻어온다.
+					ArrayList<String> arrayHeadsR = new ArrayList<String>();
+					for(int i=0; i<arrayReverse.size(); i++) {
+						
+						int nIndex = Integer.parseInt(arrayReverse.get(i));
+						String strKey = arrayMapping.get(nIndex);
+						ArrayList<LinkedHashMap<String, String>> arrayCmds = mapCmdListGroupOut.get(strKey);
+						for(int j=0; j<arrayCmds.size(); j++) {
+							
+							LinkedHashMap<String, String> mapCmd = arrayCmds.get(j);
+							String strCmdCode = mapCmd.get("command");
+							if("16".equals(strCmdCode)) { // "waypoint" Command
+								arrayHeadsR.add(mapCmd.get("param4"));// head 항목
+								break;
+							}
+							
+						}
+						
+					}
+					
+					// mapping하여 처리된 UI Command를 Drone Command로 풀어 놓는다.
+					ArrayList<LinkedHashMap<String, String>> arrayCmdRoundTripTemp = new ArrayList<LinkedHashMap<String, String>>();
+					for(int i=0; i<arrayWPRoundTrip.size(); i++) {
+						
+						int nIndex = Integer.parseInt(arrayWPRoundTrip.get(i));
+						String strKey = arrayMapping.get(nIndex);
+						ArrayList<LinkedHashMap<String, String>> arrayCmds = mapCmdListGroupOut.get(strKey);
+						arrayCmdRoundTripTemp.addAll(arrayCmds);
+						
+					}
+					
+					// 변환 로직을 적용하여 "Do Change Speed"의 값을 재설정한다.
+					// 변환 로직: round-trip이 기준이 되는 waypoint를 제외한 reverse된 waypoint를 기존 waypoint에 붙여 생성한다.
+					ArrayList<String> arraySpeeds = new ArrayList<String>();
+					arraySpeeds.addAll(arraySpeedsN);
+					arraySpeeds.remove(arraySpeeds.size()-1); // round-trip 기준 waypoint
+					arraySpeeds.addAll(arraySpeedsR);
+					arraySpeeds.add(arraySpeedsR.get(arraySpeedsR.size() -1));
+					
+					// 변환 로직을 적용하여 "Head"의 값을 재설정한다.
+					ArrayList<String> arrayHeads = new ArrayList<String>();
+					arrayHeads.addAll(arrayHeadsN);
+					/*arrayHeads.remove(arrayHeads.size()-1); // round-trip 기준 waypoint
+					arrayHeads.addAll(arrayHeadsR);
+					arrayHeads.add(arrayHeadsR.get(arrayHeadsR.size() -1));*/
+					
+					
+					ArrayList<LinkedHashMap<String, String>> arrayCmdRoundTrip = new ArrayList<LinkedHashMap<String, String>>();
+					int nIndexSpeed = 0, nIndexHead = 0, n = 0;
+					for( int i = 0; i<arrayCmdRoundTripTemp.size(); i++) {
+						
+						// 다른 객체에 설정
+						LinkedHashMap<String, String> mapCmd = arrayCmdRoundTripTemp.get(i);
+						LinkedHashMap<String, String> mapNew = new LinkedHashMap<String, String>();
+						
+						for(String strKey2 : mapCmd.keySet()) {
+							
+							if("178".equals(mapCmd.get("command"))) { // "do change speed" Command
+								
+								if("param2".equals(strKey2)) {
+									mapNew.put("param2", arraySpeeds.get(nIndexSpeed)); // "speed" 항목 값 재설정
+									nIndexSpeed++;
+								}else {
+									mapNew.put(strKey2, mapCmd.get(strKey2));
+								}
+								
+							}else if ( "16".equals(mapCmd.get("command")) ) { // "WayPoint" Command
+								
+								if("param4".equals(strKey2)) {
+									
+									if(nIndexHead == 0 && n == 0) {
+										mapNew.put("param4", arrayHeads.get(arrayHeads.size()-1)); // "head" 항목 값 재설정
+									}else {
+										mapNew.put("param4", arrayHeads.get(nIndexHead)); // "head" 항목 값 재설정
+									}
+									
+									// 역방향 head 재설정
+									if(direction != null) {
+										if("-1".equals(direction)) {
+											if(n > 0) {
+												nIndexHead++;
+											}
+											if(nIndexHead == 0 && n == 0) {
+												n++;
+											}
+											
+										}else {
+											nIndexHead++;
+										}
+									}else {
+										nIndexHead++;
+									}
+									
+								}else {
+									mapNew.put(strKey2, mapCmd.get(strKey2));
+								}
+								
+							}else {
+								mapNew.put(strKey2, mapCmd.get(strKey2));
+							}
+							
+						}
+						
+						if(!mapNew.isEmpty()) {
+							arrayCmdRoundTrip.add(mapNew);
+						}
+						
+					}
+					
+					arrayRoundTrip.addAll(arrayCmdRoundTrip);
+					
+				}
+			}else {
+				
+				// mapping하여 처리된 UI Command를 Drone Command로 풀어 놓는다.
+				ArrayList<LinkedHashMap<String, String>> arrayCmdRoundTrip = new ArrayList<LinkedHashMap<String, String>>();
+				for(int i=0; i<arrayWayPointTemp.size(); i++) {
+					
+					int nIndex = Integer.parseInt(arrayWayPointTemp.get(i));
+					String strKey = arrayMapping.get(nIndex);
+					ArrayList<LinkedHashMap<String, String>> arrayCmds = mapCmdListGroupOut.get(strKey);
+					arrayCmdRoundTrip.addAll(arrayCmds);
+					
+				}
+				
+				arrayRoundTrip.addAll(arrayCmdRoundTrip);
+				
+			}
+			
+		}
+		
+		
+		// Repeat 관련
+		
+		int num = 0;
+		if(nCntRepeat <= 0) {
+			arrayRepeat.addAll(arrayRoundTrip);
+		}else {
+			
+			for(int i=0; i<nCntRepeat; i++) {
+				arrayRepeat.addAll(arrayRoundTrip);
+				if(bRoundTrip && i == 0) {
+					arrayRoundTrip.remove(0);
+					
+					for(int j=0; j<arrayRoundTrip.size(); j++) {
+						
+						LinkedHashMap<String, String> roundTripCmd = arrayRoundTrip.get(j);
+						String commandVal = roundTripCmd.get("command");
+						if("16".equals(commandVal)) {
+							break;
+						}
+						num++;
+					}
+					
+					for( int k=0; k<num; k++) {
+						arrayRoundTrip.remove(0);
+					}
+					
+				}
+			}
+			
+		}
+		
+		// TakeOff, Land ( or Return to launch) 기존 Command를 붙여 Command List를 생성한다,
+		
+		// TakeOff Command
+		ArrayList<LinkedHashMap<String, String>> mapTakeOffCmds = new ArrayList<LinkedHashMap<String, String>>();
+		String strkey = arrayMapping.get(0);
+		mapTakeOffCmds = mapCmdListGroupOut.get(strkey);
+		arrayCmdListOut.addAll(mapTakeOffCmds);
+		
+		// Other Command Lists
+		arrayCmdListOut.addAll(arrayRepeat);
+		
+		// Land ( or Return to launch) Command
+		ArrayList<LinkedHashMap<String, String>> mapLandCmds = new ArrayList<LinkedHashMap<String, String>>();
+		String strkey2 = arrayMapping.get(arrayMapping.size() - 1);
+		mapLandCmds = mapCmdListGroupOut.get(strkey2);
+		arrayCmdListOut.addAll(mapLandCmds);
+		
+		
+		// map 자료 구조 -> json String 변환
+		Gson gsonObjA = new GsonBuilder().create();
+		String strCmds = gsonObjA.toJson(arrayCmdListOut);
+		
+		List<LinkedHashMap<String, String>> cmdLst = (List<LinkedHashMap<String, String>>) new Gson().fromJson(strCmds, List.class);
+		// Command parsing
+		List<LinkedHashMap<String, Object>> rslt = new ArrayList<LinkedHashMap<String, Object>>();
+		
+		Map<String, String> attr = null;
+		
+		System.out.println("strCmds : "+strCmds);
+		System.out.println("cmdLst : "+cmdLst.toString());
+		
+		// 역비행 관련
+		if(direction != null) {
+			
+			List<Map<String, String>> oldCmds = (List<Map<String, String>>) new Gson().fromJson(strCmds, List.class);
+			List<Map<String, String>> newCmds = new ArrayList<Map<String, String>>();
+			
+			if(!"-1".equals(direction) && !"1".equals(direction)) {
+				logger.info("code : "+MSMessageReturn.ERR_WRONG_PARAM_CODE+", message : "+MSMessageReturn.ERR_WRONG_PARAM_MSG);
+				msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_WRONG_PARAM_CODE, MSMessageReturn.ERR_WRONG_PARAM_MSG+"direction", MSMessageReturn.STAT_ERROR);
+			}
+			
+			if(Integer.parseInt(waypointNum) <= 0) {
+				logger.info("code : "+MSMessageReturn.ERR_WRONG_PARAM_CODE+", message : "+MSMessageReturn.ERR_WRONG_PARAM_MSG);
+				msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_WRONG_PARAM_CODE, MSMessageReturn.ERR_WRONG_PARAM_MSG+"waypoint_num", MSMessageReturn.STAT_ERROR);
+			}
+			
+			int wayCnt = 0;
+			int totCnt = oldCmds.size();
+			boolean flg = false;
+			
+			int no = 1;
+			
+			for(int i=0; i<totCnt; i++) {
+				
+				Map<String, String> map = oldCmds.get(i);
+				String cmdCode = map.get("command");
+				
+				if("16".equals(cmdCode)) {
+					map.put("param3", String.valueOf(no));
+					no++;
+				}
+				
+				if(cmdCode == null || "".equals(cmdCode)) {
+					logger.info("code : "+MSMessageReturn.ERR_WRONG_PARAM_CODE+", message : "+MSMessageReturn.ERR_WRONG_PARAM_MSG);
+					msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_WRONG_PARAM_CODE, MSMessageReturn.ERR_WRONG_PARAM_MSG+"command", MSMessageReturn.STAT_ERROR);
+				}
+				
+				// 역방향인 경우
+				if("-1".equals(direction)) {
+					
+					// 첫 command는 제외 (takeoff)
+					if(i==0) continue;
+					
+					// 입력받은 waypoint_num 값과 같은 경우 loop 종료
+					if(wayCnt == Integer.parseInt(waypointNum)) break;
+					
+					// waypoint 카운팅 첫 waypoint 부터 command 저장
+					if("16".equals(cmdCode)) {
+						map.put("param2", "-"+map.get("param2")); // 역방향일 경우 마이너스 붙임
+						wayCnt++;
+						flg = true;
+					}
+					
+					if(flg) newCmds.add(map);
+				}else if("1".equals(direction)){
+					// 순방향인 경우
+					
+					// waypoint 카운팅
+					if("16".equals(cmdCode)) wayCnt++;
+					
+					// 입력받은 waypoint_num 값은 같은 경우 loop 시작
+					if(wayCnt >= Integer.parseInt(waypointNum)) {
+						newCmds.add(map);
+					}
+					
+				}
+				
+			}
+			
+			// 입력받은 waypoint_num 이 waypoint 수 보다 큰 경우 exception 발생
+			if(Integer.parseInt(waypointNum) > wayCnt) {
+				logger.info("code : "+MSMessageReturn.ERR_WRONG_PARAM_CODE+", message : "+MSMessageReturn.ERR_WRONG_PARAM_MSG);
+				msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_WRONG_PARAM_CODE, MSMessageReturn.ERR_WRONG_PARAM_MSG+"waypoint_num", MSMessageReturn.STAT_ERROR);
+			}
+			
+			// 역방향 처리
+			if("-1".equals(direction)) {
+				Collections.reverse(newCmds);				
+			}
+			
+			oldCmds = newCmds;
+			
+			strCmds = gsonObjA.toJson(oldCmds);
+			
+			cmdLst = (List<LinkedHashMap<String, String>>) new Gson().fromJson(strCmds, List.class);
+			
+			System.out.println("strCmds2 : "+strCmds);
+			System.out.println("cmdLst2 : "+cmdLst.toString());
+			
+		}
+		
+		
+		int no = 1;
+		for(int i=0; i<cmdLst.size(); i++) {
+			Map<String, String> mapCmd = cmdLst.get(i);
+			String strKey = mapCmd.get("command");
+			// 역비행 요청이 아닐시에만
+			if("16".equals(strKey) && direction == null) {
+				mapCmd.put("param3", String.valueOf(no));
+				no++;
+			}
+			
+			attr = attrMap.get(strKey);
+			
+			if(attr == null) {
+				
+				String msg = "CMD_CODE : "+strkey+"(CONVERTING VALUE)";
+				
+				logger.info("code : "+MSMessageReturn.ERR_MDT_PARAM_MISS_CODE+", message : "+MSMessageReturn.ERR_MDT_PARAM_MISS_MSG);
+				msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_MDT_PARAM_MISS_CODE, MSMessageReturn.ERR_MDT_PARAM_MISS_MSG+msg, MSMessageReturn.STAT_ERROR);
+			}
+			
+			Iterator<String> it = mapCmd.keySet().iterator();
+			
+			// change and add to new command list
+			LinkedHashMap<String, Object> newAttr = new LinkedHashMap<String, Object>();
+			while(it.hasNext()) {
+				
+				String key = it.next();
+				String type = attr.get(key);
+				String val = mapCmd.get(key);
+				
+				if("command".equals(key) || "Integer".equals(type)) {
+					
+					if(val == null || "".equals(val)) {
+						
+						String msg = "ATTR/VALUE : "+key+"/"+val+"(CONVERTING VALUE)";
+						
+						logger.info("code : "+MSMessageReturn.ERR_MDT_PARAM_MISS_CODE+", message : "+MSMessageReturn.ERR_MDT_PARAM_MISS_MSG);
+						msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_MDT_PARAM_MISS_CODE, MSMessageReturn.ERR_MDT_PARAM_MISS_MSG+msg, MSMessageReturn.STAT_ERROR);
+						
+					}
+					newAttr.put(key, new Integer(val));
+					
+				}else if("Float".equals(type)) {
+					if(val == null || "".equals(val)) {
+						
+						String msg = "ATTR/VALUE : "+key+"/"+val+"(CONVERTING VALUE)";
+						
+						logger.info("code : "+MSMessageReturn.ERR_MDT_PARAM_MISS_CODE+", message : "+MSMessageReturn.ERR_MDT_PARAM_MISS_MSG);
+						msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_MDT_PARAM_MISS_CODE, MSMessageReturn.ERR_MDT_PARAM_MISS_MSG+msg, MSMessageReturn.STAT_ERROR);
+						
+					}
+					newAttr.put(key, new Double(val));
+				}
+				
+			}
+			rslt.add(newAttr);
+		}
+		
+		String val = new Gson().toJson(rslt);
+		
+		Map<String, JsonArray> result = new LinkedHashMap<>();
+		JsonParser parser2 = new JsonParser();
+		JsonElement elem = parser2.parse(val);
+		JsonArray jsonArrayVal = elem.getAsJsonArray();
+		
+		result.put("commands", jsonArrayVal);
+		
+		
+		System.out.println("result : "+result.toString());
+		
+		return result;
+		
 	}
 }
