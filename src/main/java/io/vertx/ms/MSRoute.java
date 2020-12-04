@@ -954,7 +954,7 @@ public class MSRoute extends AbstractVerticle {
 						result.put("total_distance", res.get("TOTAL_DISTANCE"));
 						result.put("count", commandArr.size()+"");//int -> string 변환
 						result.put("commands", commands);
-						result.put("create_at",res.get("CREATEDAT"));
+						result.put("created_at",res.get("CREATEDAT"));
 						
 						System.out.println("result res : "+result.toString());
 						
@@ -1241,7 +1241,7 @@ public class MSRoute extends AbstractVerticle {
 				result.put("total_distance", res.get("TOTAL_DISTANCE"));
 				result.put("count", commandArr.size()+"");//int -> string 변환
 				result.put("commands", commands);
-				result.put("create_at",res.get("CREATEDAT"));
+				result.put("created_at",res.get("CREATEDAT"));
 				
 				System.out.println("result res : "+result.toString());
 				
@@ -1250,7 +1250,7 @@ public class MSRoute extends AbstractVerticle {
 				System.out.println("result res2 : "+gson.toJson(result).toString());
 				
 				routingContext.response().putHeader("content-type", "application/json; charset=utf-8")
-				.end(gson.toJson(result));
+				.end(gson.toJson(result).replace("\\", ""));
 				
 			}).onFailure(objList->{
 				logger.info("code : "+MSMessageReturn.ERR_CREATE_CODE+", message : "+MSMessageReturn.ERR_CREATE_MSG);
@@ -1323,7 +1323,8 @@ public class MSRoute extends AbstractVerticle {
 					System.out.println("cmdList : "+cmdList.toString());
 					
 					try {
-						
+						//grid_details 필드 순서 맞추는 용
+						Map<String,Object> missionMap = (Map<String,Object>) new Gson().fromJson(json.toString(), Map.class);
 						JSONObject mission = (JSONObject) parser.parse(json.toString());
 						String comp_id = "";
 						
@@ -1337,7 +1338,7 @@ public class MSRoute extends AbstractVerticle {
 						
 						//System.out.println("mission : "+mission.toString());
 						
-						Map<String,String> gridDetailsMap = (Map<String, String>) mission.get("grid_details");
+						Map<String,String> gridDetailsMap = (Map<String, String>) missionMap.get("grid_details");
 						String gridDetails = gridDetailsMap != null ? gridDetailsMap.toString().replace("=", ":") : "";
 						
 						mission.put("grid_details", gridDetails);
@@ -1656,8 +1657,8 @@ public class MSRoute extends AbstractVerticle {
 									
 					return promise.future();
 					
-				}).compose(ar ->{
-					Promise<Void> promise = Promise.promise();
+				}).compose(missionId ->{
+					Promise<String> promise = Promise.promise();
 					JSONObject insQueryId = MISSION.get(0);//new JSONObject();
 					insQueryId.put(COL_ID, "2004");
 					System.out.println("insertMission  : "+insQueryId.toString());
@@ -1674,7 +1675,7 @@ public class MSRoute extends AbstractVerticle {
 								System.out.println("res : "+res.toString());
 								//인써트 성동
 								if("10002".equals(res.get("code").toString())) {
-									promise.complete();
+									promise.complete(missionId);
 								}else {
 									logger.error("failed executing inside vertx.selectQuery");
 									promise.fail("failed executing inside vertx.selectQuery");
@@ -1697,8 +1698,8 @@ public class MSRoute extends AbstractVerticle {
 					
 					
 					return promise.future();
-				}).compose(ar ->{
-					Promise<Void> promise = Promise.promise();
+				}).compose(missionId ->{
+					Promise<String> promise = Promise.promise();
 					
 					List<Future> futureList = new ArrayList<>();
 					//CommandList Table insert
@@ -1707,7 +1708,7 @@ public class MSRoute extends AbstractVerticle {
 						insQueryId.put(COL_ID, "2005");
 						insQueryId.put("mission_sub_id", "");						
 						
-						System.out.println("insertCommandList : "+insQueryId.toString());						
+						//System.out.println("insertCommandList : "+insQueryId.toString());
 						//Mission Table Insert
 						Future<String> fut2 = this.insertList(insQueryId, routingContext);
 						futureList.add(fut2);
@@ -1718,18 +1719,18 @@ public class MSRoute extends AbstractVerticle {
 						System.out.println("insertCommandList complete");
 						
 						if(ar2.succeeded()) {
-							System.out.println("success complete");
-							promise.complete();
+							//System.out.println("success complete");
+							promise.complete(missionId);
 						}else {
-							System.out.println("fail complete");
+							//System.out.println("fail complete");
 							promise.fail("fail!");
 						}
 						
 					});
 					
 					return promise.future();
-				}).compose(ar ->{
-					Promise<Void> promise = Promise.promise();
+				}).compose(missionId ->{
+					Promise<String> promise = Promise.promise();
 					
 					List<Future> futureList = new ArrayList<>();
 					
@@ -1738,7 +1739,7 @@ public class MSRoute extends AbstractVerticle {
 						JSONObject insQueryId = ATTRIBUTE.get(i);//new JSONObject();
 						insQueryId.put(COL_ID, "2006");
 						
-						System.out.println("insertAttributeList : "+insQueryId.toString());
+						//System.out.println("insertAttributeList : "+insQueryId.toString());
 						
 						Future<String> fut2 = this.insertList(insQueryId, routingContext);
 						futureList.add(fut2);
@@ -1746,25 +1747,267 @@ public class MSRoute extends AbstractVerticle {
 					}
 					
 					CompositeFuture.all(futureList).onComplete(ar2 -> {
-						System.out.println("insertAttributeList complete");
+						//System.out.println("insertAttributeList complete");
 						
 						if(ar2.succeeded()) {
-							System.out.println("success complete");
-							promise.complete();
+							//System.out.println("success complete");
+							promise.complete(missionId);
 						}else {
-							System.out.println("fail complete");
+							//System.out.println("fail complete");
 							promise.fail("fail!");
 						}
 						
 					});
 					
 					return promise.future();
-				}).onSuccess(ar->{
-					logger.info("code : "+MSMessageReturn.SUCCESS_CODE+", message : "+MSMessageReturn.SUCCESS_MSG);
-					msMessageReturn.commonReturn(routingContext, MSMessageReturn.SUCCESS_CODE, MSMessageReturn.SUCCESS_MSG, MSMessageReturn.STAT_SUCCESS);
-				}).onFailure(ar->{
-					logger.info("code : "+MSMessageReturn.ERR_UPDATE_CODE+", message : "+MSMessageReturn.ERR_UPDATE_MSG);
-					msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_UPDATE_CODE, MSMessageReturn.ERR_UPDATE_MSG, MSMessageReturn.STAT_ERROR);
+				}).onSuccess(missionId->{
+					
+					JSONObject colId = new JSONObject();					
+					colId.put(COL_ID, "2010");
+					colId.put("mission_id", missionId);					
+					
+					if(MISSION.get(0).get("comp_id") != null) {
+						colId.put("comp_id", MISSION.get(0).get("comp_id").toString());
+						System.out.println("insertMission comp_id : "+colId.get("comp_id").toString());
+					}
+					
+					System.out.println("insertMission getMissions : "+colId.toString());
+					
+					//Mission Table Insert
+					Future<JSONObject> fut2 = Future.future(promise -> eb.request("vertx.selectQuery", colId.toString(), reply -> {
+						
+						if(reply.succeeded()) {	
+							
+							try {
+								JSONArray result = (JSONArray) parser.parse(reply.result().body().toString());
+								JSONObject res =(JSONObject) result.get(0);
+								String code = "";
+								
+								//쿼리 오류 확인
+								if(res.get("code")!=null) {
+									code= res.get("code").toString();
+								}
+								
+								System.out.println("getMissions result : "+result.toString());
+								System.out.println("getMissions res : "+res.toString());
+								
+								//JSONObject mission =(JSONObject) reply.result().body();
+								//System.out.println("mission : "+mission.toString());
+								
+								//쿼리 오류 발생 시
+								if( !"".equals(code) &&  !"10002".equals(code)) {
+									logger.info("code : "+MSMessageReturn.ERR_RETRIEVE_DATA_CODE+", message : "+MSMessageReturn.ERR_RETRIEVE_DATA_MSG);
+									msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_RETRIEVE_DATA_CODE, MSMessageReturn.ERR_RETRIEVE_DATA_MSG, MSMessageReturn.STAT_ERROR);
+								}else if( !"".equals(code) && "10001".equals(code)){									
+									logger.info("code : "+MSMessageReturn.ERR_RETRIEVE_DATA_CODE+", message : "+MSMessageReturn.ERR_RETRIEVE_DATA_MSG);
+									msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_RETRIEVE_DATA_CODE, MSMessageReturn.ERR_RETRIEVE_DATA_MSG+"Not found mission : "+missionId, MSMessageReturn.STAT_ERROR);
+								}else {
+									
+									promise.complete(res);
+									
+								}
+								
+							} catch (ParseException e) {
+								promise.fail("fail!");
+								logger.error("failed parsing json insertMission");
+								messageReturn.commonReturn(routingContext, MessageReturn.RC_VERTICLE_FAIL_CODE, MessageReturn.RC_VERTICLE_FAIL_REASON, isXML);
+							}
+							
+							
+						}else {
+							logger.error("failed executing inside vertx.selectQuery");							
+							messageReturn.commonReturn(routingContext, MessageReturn.RC_VERTICLE_FAIL_CODE, MessageReturn.RC_VERTICLE_FAIL_REASON, isXML);					
+						}
+					}));
+					
+					
+					fut2.compose(mission -> {
+						Promise<List<Object>> promise = Promise.promise();
+						
+						colId.put(COL_ID, "2011");
+						
+						eb.request("vertx.selectQuery", colId.toString(), reply -> {
+							
+							if(reply.succeeded()) {	
+								
+								try {
+									JSONArray result = (JSONArray) parser.parse(reply.result().body().toString());
+									JSONObject res =(JSONObject) result.get(0);
+									String code = "";
+									
+									//쿼리 오류 확인
+									if(res.get("code")!=null) {
+										code= res.get("code").toString();
+									}
+									
+									System.out.println("getCommandList result : "+result.toString());
+									System.out.println("getCommandList res : "+res.toString());
+									
+									//JSONObject mission =(JSONObject) reply.result().body();
+									//System.out.println("mission : "+mission.toString());
+									
+									//쿼리 오류 발생 시
+									if( !"".equals(code) &&  !"10002".equals(code)) {
+										logger.info("code : "+MSMessageReturn.ERR_RETRIEVE_DATA_CODE+", message : "+MSMessageReturn.ERR_RETRIEVE_DATA_MSG);
+										msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_RETRIEVE_DATA_CODE, MSMessageReturn.ERR_RETRIEVE_DATA_MSG, MSMessageReturn.STAT_ERROR);
+									}else if( !"".equals(code) && "10001".equals(code)){									
+										logger.info("code : "+MSMessageReturn.ERR_RETRIEVE_DATA_CODE+", message : "+MSMessageReturn.ERR_RETRIEVE_DATA_MSG);
+										msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_RETRIEVE_DATA_CODE, MSMessageReturn.ERR_RETRIEVE_DATA_MSG+"Not found attributeslist : "+missionId, MSMessageReturn.STAT_ERROR);
+									}else {
+										
+										List<Object> lst = new ArrayList<Object>();
+										lst.add(mission);
+										lst.add(result);
+										
+										promise.complete(lst);
+										
+									}
+									
+								} catch (ParseException e) {
+									promise.fail("fail!");
+									logger.error("failed parsing json insertMission");
+									messageReturn.commonReturn(routingContext, MessageReturn.RC_VERTICLE_FAIL_CODE, MessageReturn.RC_VERTICLE_FAIL_REASON, isXML);
+								}
+								
+								
+							}else {
+								logger.error("failed executing inside vertx.selectQuery");							
+								messageReturn.commonReturn(routingContext, MessageReturn.RC_VERTICLE_FAIL_CODE, MessageReturn.RC_VERTICLE_FAIL_REASON, isXML);					
+							}
+						});
+						
+						
+						return promise.future();
+						
+					}).compose(objLst -> {
+						Promise<List<Object>> promise = Promise.promise();
+						
+						colId.put(COL_ID, "2012");
+						
+						eb.request("vertx.selectQuery", colId.toString(), reply -> {
+							
+							if(reply.succeeded()) {	
+								
+								try {
+									JSONArray result = (JSONArray) parser.parse(reply.result().body().toString());
+									JSONObject res =(JSONObject) result.get(0);
+									String code = "";
+									
+									//쿼리 오류 확인
+									if(res.get("code")!=null) {
+										code= res.get("code").toString();
+									}
+									
+									System.out.println("getAttributeList result : "+result.toString());
+									System.out.println("getAttributeList res : "+res.toString());
+									
+									//JSONObject mission =(JSONObject) reply.result().body();
+									//System.out.println("mission : "+mission.toString());
+									
+									//쿼리 오류 발생 시
+									if( !"".equals(code) &&  !"10002".equals(code)) {
+										logger.info("code : "+MSMessageReturn.ERR_RETRIEVE_DATA_CODE+", message : "+MSMessageReturn.ERR_RETRIEVE_DATA_MSG);
+										msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_RETRIEVE_DATA_CODE, MSMessageReturn.ERR_RETRIEVE_DATA_MSG, MSMessageReturn.STAT_ERROR);
+									}else if( !"".equals(code) && "10001".equals(code)){									
+										logger.info("code : "+MSMessageReturn.ERR_RETRIEVE_DATA_CODE+", message : "+MSMessageReturn.ERR_RETRIEVE_DATA_MSG);
+										msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_RETRIEVE_DATA_CODE, MSMessageReturn.ERR_RETRIEVE_DATA_MSG+"Not found attributeslist : "+missionId, MSMessageReturn.STAT_ERROR);
+									}else {
+										
+										objLst.add(result);
+										
+										promise.complete(objLst);
+									}
+									
+								} catch (ParseException e) {
+									promise.fail("fail!");
+									logger.error("failed parsing json insertMission");
+									messageReturn.commonReturn(routingContext, MessageReturn.RC_VERTICLE_FAIL_CODE, MessageReturn.RC_VERTICLE_FAIL_REASON, isXML);
+								}
+								
+								
+							}else {
+								logger.error("failed executing inside vertx.selectQuery");							
+								messageReturn.commonReturn(routingContext, MessageReturn.RC_VERTICLE_FAIL_CODE, MessageReturn.RC_VERTICLE_FAIL_REASON, isXML);					
+							}
+						});
+						
+						
+						return promise.future();
+						
+					}).onSuccess(objList->{
+						
+						JSONObject res = (JSONObject) objList.get(0);
+						JSONArray commandArr = (JSONArray) objList.get(1);
+						JSONArray attributeArr = (JSONArray) objList.get(2);
+						
+						System.out.println("mission res :"+res.toJSONString());
+						System.out.println("commandArr res :"+commandArr.toJSONString());
+						System.out.println("attributeArr res :"+attributeArr.toJSONString());
+						
+						List<Map<String, Object>> commands = new ArrayList<Map<String, Object>>();
+						
+						
+						for(int i=0; i<commandArr.size(); i++) {
+							Map<String, Object> map = new LinkedHashMap<>();
+							
+							JSONObject command = (JSONObject) commandArr.get(i);
+							String comId = command.get("CMD_ID").toString();
+							
+							map.put("command", command.get("CMD_CODE").toString());
+							
+							for(int j=0; j<attributeArr.size(); j++) {
+								
+								JSONObject attribute = (JSONObject) attributeArr.get(j);
+								String attrComId = attribute.get("CMD_ID").toString();
+								
+								if(attrComId.equals(comId)) {
+									String attrNm= attribute.get("ATTR_NAME").toString();
+									String attrVal = attribute.get("ATTR_VAL").toString();
+									
+									map.put(attrNm, attrVal);
+								}
+								
+							}
+							
+							commands.add(map);
+						}
+						
+						//조회 필드 순서 때문에 재입력함(JsonObject 형식은 순서X)
+						Map<String, Object> result = new LinkedHashMap<>();
+						
+						result.put("mission_id", res.get("MISSION_ID"));
+						result.put("mission_name", res.get("MISSION_NAME"));
+						result.put("user_id", res.get("USER_ID"));
+						result.put("roundtrip", res.get("ROUNDTRIP"));
+						result.put("repeat", res.get("REPEAT"));
+						result.put("is_grid", res.get("IS_GRID"));
+						result.put("service_type", res.get("SERVICE_TYPE"));
+						String gridString = res.get("GRID_DETAILS").toString();
+						Map<String,String> grid_details = (Map<String,String>) new Gson().fromJson(gridString, Map.class);	
+						result.put("grid_details",grid_details);
+						result.put("total_time", res.get("TOTAL_TIME"));
+						result.put("total_distance", res.get("TOTAL_DISTANCE"));
+						result.put("count", commandArr.size()+"");//int -> string 변환
+						result.put("commands", commands);
+						result.put("created_at",res.get("CREATEDAT"));
+						
+						System.out.println("result res : "+result.toString());
+						
+						Gson gson = new Gson();
+						
+						System.out.println("result res2 : "+gson.toJson(result).toString());
+						
+						routingContext.response().putHeader("content-type", "application/json; charset=utf-8")
+						.end(gson.toJson(result));
+						
+					}).onFailure(objList->{
+						logger.info("code : "+MSMessageReturn.ERR_CREATE_CODE+", message : "+MSMessageReturn.ERR_CREATE_MSG);
+						msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_CREATE_CODE, MSMessageReturn.ERR_CREATE_MSG, MSMessageReturn.STAT_ERROR);
+					});
+					
+				}).onFailure(missionId->{
+					logger.info("code : "+MSMessageReturn.ERR_CREATE_CODE+", message : "+MSMessageReturn.ERR_CREATE_MSG);
+					msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_CREATE_CODE, MSMessageReturn.ERR_CREATE_MSG, MSMessageReturn.STAT_ERROR);
 				});
 
 				
@@ -2194,7 +2437,7 @@ public class MSRoute extends AbstractVerticle {
 								rstl.put("service_type", mission.get("SERVICE_TYPE"));
 								rstl.put("user_id", mission.get("USER_ID"));
 								rstl.put("mission_id", mission.get("MISSION_ID"));
-								rstl.put("create_at",mission.get("CREATEDAT"));
+								rstl.put("created_at",mission.get("CREATEDAT"));
 								rstl.put("lon", mission.get("lon"));
 								rstl.put("comp_id", mission.get("COMP_ID"));
 								rstl.put("lat", mission.get("lat"));
