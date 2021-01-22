@@ -1,6 +1,8 @@
 package io.vertx.common.message;
 
 import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.List;
 
 import org.apache.commons.configuration.ConfigurationException;
 import org.apache.log4j.Logger;
@@ -8,6 +10,7 @@ import org.apache.log4j.Logger;
 import io.vertx.core.eventbus.Message;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
+import io.vertx.ext.sql.SQLConnection;
 
 public class QueryMessage extends MessageReturn{
 
@@ -63,4 +66,30 @@ public class QueryMessage extends MessageReturn{
 		
 	}
 	
+	
+	public void transactionReturn(Message<Object> message, String code, String reason, SQLConnection connection) {
+		
+		String tempCode = code;
+		String tempReason = reason;
+		
+		tempReason = tempReason.replace("\"", "");
+		//tempReason = tempReason.replace("\\", "");
+
+		JsonObject replyMessage = new JsonObject();
+		replyMessage.put("code", tempCode);
+		replyMessage.put("reason", tempReason);
+		
+		JsonArray testing = new JsonArray();
+		testing.add(replyMessage);
+		
+		logger.warn(tempCode + " =========== " + tempReason);
+		
+		List<Object> objList = new ArrayList<Object>();
+		
+		objList.add(testing);
+		objList.add(connection);
+		
+		message.reply(connection);
+		
+	}
 }

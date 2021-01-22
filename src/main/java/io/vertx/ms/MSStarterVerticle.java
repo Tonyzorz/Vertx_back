@@ -80,13 +80,25 @@ public class MSStarterVerticle extends AbstractVerticle {
 					
 					for (int i = 0; i < temp1.size(); i++) {
 					    JSONObject explrObject = (JSONObject) temp1.get(i);
-					    String instance_nm = (String) explrObject.get("instance_nm");
-					    Long instance_cnt_l = (Long) explrObject.get("instance_cnt");
+					    
+					    String role_instance_id = "";
+					    String instance_nm = "";					    
+					    Long instance_cnt_l;
+					    
+					    if("oracle".equals(config().getString("db"))) {
+					    	role_instance_id = (String) explrObject.get("ROLE_INSTANCE_ID");
+					    	instance_nm = (String) explrObject.get("INSTANCE_NM");					
+							instance_cnt_l = (Long) explrObject.get("INSTANCE_CNT");
+						}else {
+							role_instance_id = (String) explrObject.get("role_instance_id");
+							instance_nm = (String) explrObject.get("instance_nm");					
+							instance_cnt_l = (Long) explrObject.get("instance_cnt");
+						}
 					    Integer instance_cnt = (int) (long) instance_cnt_l;
 					    
 					    System.out.println(i+" : "+explrObject.toJSONString());
 					    
-					    if("1".equals(explrObject.get("role_instance_id"))) {					    	
+					    if("1".equals(role_instance_id)) {					    	
 					    	vertx.deployVerticle(config().getString("ms_package_nm")+instance_nm, new DeploymentOptions().setConfig(config()).setWorker(true).setInstances(instance_cnt));
 							logger.info("deployed " + instance_cnt + "  "+ instance_nm);
 					    }

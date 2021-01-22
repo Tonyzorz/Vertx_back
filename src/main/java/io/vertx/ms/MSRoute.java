@@ -102,10 +102,10 @@ public class MSRoute extends AbstractVerticle {
 	private static final String SERVER_FILE = "file:/data/ms_router.properties";
 	private static final String CLASSPATH_FILE = "ms_router.properties";
 	
-	private static final String COL_ID = "queryId";
-	private static final String COL_QSTR = "queryString";
-	private static final String COL_DESC = "descript";
-	private static final String COL_SQLT = "sqlType";
+	private static String COL_ID = "queryId";
+	private static String COL_QSTR = "queryString";
+	private static String COL_DESC = "descript";
+	private static String COL_SQLT = "sqlType";
 	private static final String ADDR = "address";
 	
 	private RouterMessage messageReturn;
@@ -115,6 +115,13 @@ public class MSRoute extends AbstractVerticle {
 	public void start(Future<Void> fut) throws ConfigurationException {
 
 		logger.info("started MSRoute");
+		
+		if("oracle".equals(config().getString("db"))) {
+			COL_ID = "QUERYID";
+			COL_QSTR = "QUERYSTRING";
+			COL_DESC = "DESCRIPT";
+			COL_SQLT = "SQLTYPE";
+		}
 
 		eb = vertx.eventBus();
 		
@@ -192,7 +199,12 @@ public class MSRoute extends AbstractVerticle {
 		String ms_reverseUploadMission = configuration.getString("router.ms_reverseUploadMission");
 		String ms_serviceList = configuration.getString("router.ms_serviceList");
 		String ms_commandByService = configuration.getString("router.ms_commandByService");
-		String ms_geofenceList = configuration.getString("router.ms_geofenceList");
+		String geo_list = configuration.getString("router.geo_list");
+		String geo_details = configuration.getString("router.geo_details");
+		String geo_create = configuration.getString("router.geo_create");
+		String geo_update = configuration.getString("router.geo_update");
+		String geo_delete = configuration.getString("router.geo_delete");
+		String geo_uploadMission = configuration.getString("router.geo_uploadGeofence");
 		
 		String ms_test = "/mission/test";
 		
@@ -205,7 +217,12 @@ public class MSRoute extends AbstractVerticle {
 		router.post(ms_reverseUploadMission).handler(this::getReverseMissionToUpload);
 		router.get(ms_serviceList).handler(this::getServiceTypeList);
 		router.post(ms_commandByService).handler(this::getCommandByServiceType);
-		router.post(ms_geofenceList).handler(this::getGeofence);
+		router.post(geo_list).handler(this::getGeofence);
+		router.get(geo_details).handler(this::getGeofenceDetail);
+		router.put(geo_create).handler(this::insertGeofence);
+		router.put(geo_update).handler(this::updateGeofence);
+		router.post(geo_delete).handler(this::deleteGeofence);
+		router.get(geo_uploadMission).handler(this::getGeofenceToUpload);
 		router.put(ms_test).handler(this::insertTest);
 		
 		// Create the HTTP server and pass the "accept" method to the request handler.
@@ -253,221 +270,6 @@ public class MSRoute extends AbstractVerticle {
 		}
 	}
 	
-	private void queryUpdate(RoutingContext routingContext) {
-
-		logger.info("entered queryUpdate");
-
-		JSONObject jsonRoutingData = new JSONObject();
-		String queryNum = routingContext.request().getParam(COL_ID);
-
-		/**
-		 * queryNum이 없을시 전체 업데이트 있으면 해당 query만 업데이트
-		 */
-		if (queryNum == null) {
-
-			jsonRoutingData.put(ADDR, "sharedDataQueryUpdateAll");
-
-		} else {
-
-			jsonRoutingData.put(ADDR, "sharedDataQueryUpdateOne");
-			jsonRoutingData.put(COL_ID, queryNum);
-		}
-
-		logger.info("attempting to connect to vertx.sharedDataQueryUpdate verticle");
-
-		eb.request("vertx.sharedDataQueryUpdate", jsonRoutingData.toString(), reply -> {
-			
-			if(reply.succeeded()) {
-				
-				logger.info("finished connection with vertx.sharedDataQueryUpdate eventbus");
-				routingContext.response().putHeader("content-type", "application/json; charset=utf-8")
-				.end(reply.result().body().toString());
-				
-			} else {
-				logger.error("failed executing inside vertx.sharedDataQueryUpdate");
-				messageReturn.commonReturn(routingContext, MessageReturn.RC_VERTICLE_FAIL_CODE, MessageReturn.RC_VERTICLE_FAIL_REASON, isXML);
-			}
-
-		});
-
-	}
-
-	
-	private void selectQuery(RoutingContext routingContext) {
-
-		logger.info("entered selectQuery");
-
-		try {
-			
-			String test = routingContext.getBody().toString();
-			JsonObject json;
-			
-			if("".equals(test)) {
-				
-				json = new JsonObject();
-				
-			} else {
-				
-				json = new JsonObject(routingContext.getBody().toString());
-			}
-			
-			xmlCheck(routingContext);
-
-			// query 번호 받기
-			String idString = routingContext.request().getParam(ADDR);
-
-			// body에 값이 있을때 validation vertx 실행
-			if (!json.isEmpty()) {
-				
-				boolean validationValid = this.checkSql(json.toString());
-				
-				// validation 문제 없을시 참
-				if (validationValid) {
-
-					// 쿼리 id json에 저장
-					json.put(ADDR, idString);
-					
-					// query verticle
-					logger.info("attempting to connect to vertx.query verticle");
-					
-					eb.request("vertx.query", json.toString(), result -> {
-						
-						logger.info("finished connection with vertx.query verticle");
-
-						if (result.succeeded()) {
-							
-							String res = result.result().body().toString();
-
-							// data를 xml로 리턴
-							if (isXML) {
-
-								logger.info("About to convert json to xml");
-
-								res = res.replaceAll("[<]", "<![CDATA[");
-								res = res.replaceAll("[>]", "]]>");
-								
-								XmlConvert xmlConvert = XmlConvert.xmlConvert(res);
-								boolean success = xmlConvert.isSuccess();
-								String xmlResult = xmlConvert.getXmlResult();
-								
-								if(success) {
-									
-									logger.info("Successfully converted json to xml");
-									routingContext.response().putHeader("content-type", "application/xml; charset=utf-8")
-									.end(xmlResult);
-									
-								} else {
-									
-									logger.error("Failed converting json to xml or is not in xml converting format");
-									routingContext.response().putHeader("content-type", "application/json; charset=utf-8")
-									.end(res);
-
-								}
-								
-								// json으로 리턴
-							} else {
-								
-								logger.info("Successfully returned data in json format");
-								routingContext.response().putHeader("content-type", "application/json; charset=utf-8")
-								.end(res);
-							}
-
-						} else {
-							
-							logger.error("failed executing inside vertx.query");
-							messageReturn.commonReturn(routingContext, MessageReturn.RC_VERTICLE_FAIL_CODE, MessageReturn.RC_VERTICLE_FAIL_REASON, isXML);
-						}
-					});
-
-					// validation verticle통해 결과가 false, body에 문제가 있다
-				} else {
-					
-					logger.warn("Validation problem occurred");
-					messageReturn.commonReturn(routingContext, MessageReturn.VC_PROBLEM_CODE, MessageReturn.VC_PROBLEM_REASON, isXML);
-					
-				}
-
-				// body가 없으니 validation vertx실행안하고 바로 vertx.query를 실행한다
-			} else {
-
-				// eventbus를 통해 verticle에 보낼 json data
-				JsonObject jsons = new JsonObject();
-				jsons.put(ADDR, idString);
-
-				// query verticle
-				logger.info("attempting to connect to vertx.query verticle");
-				
-				eb.request("vertx.query", jsons.toString(), result -> {
-					
-					logger.info("finished connection with vertx.query verticle");
-
-					if (result.succeeded()) {
-						
-						String res = result.result().body().toString();
-
-						// data를 xml로 리턴
-						if (isXML) {
-
-							logger.info("About to convert json to xml");
-							
-							res = res.replaceAll("[<]", "<![CDATA[");
-							res = res.replaceAll("[>]", "]]>");
-
-							XmlConvert xmlConvert = XmlConvert.xmlConvert(res);
-							boolean success = xmlConvert.isSuccess();
-							String xmlResult = xmlConvert.getXmlResult();
-							
-							if(success) {
-								
-								logger.info("Successfully converted json to xml");
-								routingContext.response().putHeader("content-type", "application/xml; charset=utf-8")
-								.end(xmlResult);
-								
-							} else {
-								
-								logger.error("Failed converting json to xml or is not in xml converting format");
-								routingContext.response().putHeader("content-type", "application/json; charset=utf-8")
-								.end(res);
-
-							}
-							
-							// json으로 리턴
-						} else {
-							
-							logger.info("Successfully returned data in json format");
-							routingContext.response().putHeader("content-type", "application/json; charset=utf-8")
-							.end(res);
-						}
-					} else {
-						
-						logger.error("failed executing inside vertx.query");
-						messageReturn.commonReturn(routingContext, MessageReturn.RC_VERTICLE_FAIL_CODE, MessageReturn.RC_VERTICLE_FAIL_REASON, isXML);
-
-					}
-
-				});
-			}
-
-		} catch(NullPointerException e) {
-			
-			logger.error("NullPointerException occurred");
-			messageReturn.commonReturn(routingContext, MessageReturn.RC_NULL_POINTER_EXCEPTION_CODE, MessageReturn.RC_NULL_POINTER_EXCEPTION_REASON, isXML);
-	
-		} catch(DecodeException e) {
-			
-			logger.error("DecodeException has occurred");
-			messageReturn.commonReturn(routingContext, MessageReturn.RC_DECODE_EXCEPTION_CODE, MessageReturn.RC_DECODE_EXCEPTION_REASON, isXML);
-
-			
-		} catch(Exception e) {
-			
-			logger.error("Exception has occurred");
-			messageReturn.commonReturn(routingContext, MessageReturn.RC_EXCEPTION_CODE, MessageReturn.RC_EXCEPTION_REASON, isXML);
-
-		}
-
-	}
-
 	/**
 	 * Insert one query data
 	 * 
@@ -2333,7 +2135,7 @@ public class MSRoute extends AbstractVerticle {
 			JsonObject json = routingContext.getBodyAsJson();
 		
 			logger.info("attempting to connect to vertx.queryManage verticle");
-			json.put("queryId", "2000");
+			json.put(COL_ID, "2000");
 			//json.put("isXML", true);
 			
 			boolean isXML = false;			
@@ -2379,7 +2181,7 @@ public class MSRoute extends AbstractVerticle {
 			
 			fut1.compose(missions -> {
 				
-				json.put("queryId", "2001");
+				json.put(COL_ID, "2001");
 				
 				Promise<Void> promise = Promise.promise();
 				
@@ -2408,51 +2210,58 @@ public class MSRoute extends AbstractVerticle {
 								
 								JSONObject mission = (JSONObject) missions.get(i);
 								
-								for (int j = 0; j < attrs.size(); j++) {
+								//조회 결과가 없으면
+								if(mission.get("code") != null && "10001".equals(mission.get("code").toString())) {
 									
-									JSONObject attr = (JSONObject) attrs.get(j);
+									result.put("count", "0");
+									result.put("missions", list);
 									
-									if(mission.get("MISSION_ID").equals(attr.get("MISSION_ID"))) {
+									
+								}else {
+									for (int j = 0; j < attrs.size(); j++) {
 										
-										Integer attr_code = Integer.parseInt(attr.get("ATTR_CODE").toString()) ;
+										JSONObject attr = (JSONObject) attrs.get(j);
 										
-										if(attr_code == 16001)
-											mission.put("lat",attr.get("ATTR_VAL"));
-										else if (attr_code == 16002)
-											mission.put("lon",attr.get("ATTR_VAL"));
+										if(mission.get("MISSION_ID") != null && mission.get("MISSION_ID").equals(attr.get("MISSION_ID"))) {
+											
+											Integer attr_code = Integer.parseInt(attr.get("ATTR_CODE").toString()) ;
+											
+											if(attr_code == 16001)
+												mission.put("lat",attr.get("ATTR_VAL"));
+											else if (attr_code == 16002)
+												mission.put("lon",attr.get("ATTR_VAL"));
+											
+											mission.remove("roundtrip");
+											mission.remove("repeat");
+											mission.remove("is_grid");
+											mission.remove("grid_details");
+											mission.remove("total_time");
+											mission.remove("total_distance");
+										}
 										
-										mission.remove("roundtrip");
-										mission.remove("repeat");
-										mission.remove("is_grid");
-										mission.remove("grid_details");
-										mission.remove("total_time");
-										mission.remove("total_distance");
 									}
 									
+									Map<String, Object> rstl = new LinkedHashMap<>();
+									
+									rstl.put("mission_name", mission.get("MISSION_NAME"));
+									rstl.put("service_type", mission.get("SERVICE_TYPE"));
+									rstl.put("user_id", mission.get("USER_ID"));
+									rstl.put("mission_id", mission.get("MISSION_ID"));
+									rstl.put("created_at",mission.get("CREATEDAT"));
+									rstl.put("lon", mission.get("lon"));
+									rstl.put("comp_id", mission.get("COMP_ID"));
+									rstl.put("lat", mission.get("lat"));
+									
+									list.add(rstl);
+									
+									System.out.println("missons3 : "+list.toString());
+									
+									
+									result.put("count", missions.size()+"");
+									result.put("missions", list);
 								}
 								
-								Map<String, Object> rstl = new LinkedHashMap<>();
-								
-								rstl.put("mission_name", mission.get("MISSION_NAME"));
-								rstl.put("service_type", mission.get("SERVICE_TYPE"));
-								rstl.put("user_id", mission.get("USER_ID"));
-								rstl.put("mission_id", mission.get("MISSION_ID"));
-								rstl.put("created_at",mission.get("CREATEDAT"));
-								rstl.put("lon", mission.get("lon"));
-								rstl.put("comp_id", mission.get("COMP_ID"));
-								rstl.put("lat", mission.get("lat"));
-								
-								list.add(rstl);
-								
 							}
-							
-							System.out.println("missons3 : "+list.toString());
-							
-							
-							result.put("count", missions.size()+"");
-							result.put("missions", list);
-							
-							logger.info("About to convert json to xml");
 
 							routingContext.response().putHeader("content-type", "application/json; charset=utf-8")
 							.end(result.toString());
@@ -3868,28 +3677,369 @@ public class MSRoute extends AbstractVerticle {
 
 	}
 	
+	/**
+	 * Retrieves all query info
+	 * 
+	 * @param routingContext
+	 */
 	private void getGeofence(RoutingContext routingContext) {
+		
+		logger.info("Entered getGeofence");
+		
+		try {
 
-		logger.info("Entered getCommandByServiceType");
+			//JsonObject json = new JsonObject();
+			//json.put(ADDR, "getAllMission");
+			
+			JsonObject json = routingContext.getBodyAsJson();
+			
+			String compId = json.getString("comp_id");
+			
+			if("".equals(compId) || compId == null){				
+				logger.info("code : "+MSMessageReturn.ERR_RETRIEVE_DATA_CODE+", message : "+MSMessageReturn.ERR_RETRIEVE_DATA_MSG);
+				msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_RETRIEVE_DATA_CODE, MSMessageReturn.ERR_RETRIEVE_DATA_MSG+"Comp_id is null", MSMessageReturn.STAT_ERROR);				
+			}
+		
+			logger.info("attempting to connect to vertx.queryManage verticle");
+			json.put(COL_ID, "2026");
+			json.put("compId", compId);
+			
+			//json.put("isXML", true);
+			
+			boolean isXML = false;			
+			
+			Future<JSONArray> fut1 = Future.future(promise -> eb.request("vertx.selectQuery", json.toString(), reply -> {
+				
+				
+				if(reply.succeeded()) {
+					
+					JSONParser parser = new JSONParser();
+					JSONArray geofences = null;
+					JSONObject result = new JSONObject();
+					
+					String res = reply.result().body().toString();
+					
+					System.out.println("res : "+res);
+					
+					try {
+						
+						geofences = (JSONArray) parser.parse(res);
+						
+						System.out.println("geofences : "+geofences.toJSONString());
+						
+						//result.put("count", temp1.size()+"");
+						//result.put("missions", temp1);
+
+					} catch (ParseException e) {
+						// TODO Auto-generated catch block
+						promise.fail(e.getCause());
+						logger.error("failed parsing json getAllGeofence");
+
+					}
+					
+					promise.complete(geofences);
+					
+				}else {
+					promise.fail(reply.cause());
+					logger.error("failed executing inside vertx.selectQuery");
+					messageReturn.commonReturn(routingContext, MessageReturn.RC_VERTICLE_FAIL_CODE, MessageReturn.RC_VERTICLE_FAIL_REASON, isXML);
+				}
+				
+			}));
+			
+			fut1.compose(geofences -> {
+				
+				json.put(COL_ID, "2019");
+				
+				Promise<Void> promise = Promise.promise();
+				
+				eb.request("vertx.selectQuery", json.toString(), reply -> {
+					
+					if(reply.succeeded()) {
+						
+						JSONParser parser = new JSONParser();
+						JSONArray geopoints = null;
+						JSONObject result = new JSONObject();
+						
+						String res = reply.result().body().toString();
+						
+						System.out.println("res2 : "+res);
+						
+						try {
+							
+							geopoints = (JSONArray) parser.parse(res);
+							
+							System.out.println("geopoints : "+geopoints.toJSONString());
+							System.out.println("geofences2 : "+geofences.toJSONString());
+							
+							List<Map<String, Object>> list = new ArrayList<Map<String, Object>>();
+							
+							for (int i = 0; i < geofences.size(); i++) {
+								
+								JSONObject geofence = (JSONObject) geofences.get(i);
+								
+								for (int j = 0; j < geopoints.size(); j++) {
+									
+									JSONObject attr = (JSONObject) geopoints.get(j);
+									
+									if(geofence.get("GEO_ID").equals(attr.get("GEO_ID"))) {										
+										geofence.put("lat0",attr.get("GEO_LAT"));
+										geofence.put("lon0",attr.get("GEO_LON"));
+									}
+									
+								}
+								
+								Map<String, Object> rstl = new LinkedHashMap<>();
+								
+								rstl.put("comp_id", geofence.get("COMP_ID"));
+								rstl.put("geo_id", geofence.get("GEO_ID"));								
+								rstl.put("geo_name", geofence.get("GEO_NAME"));								
+								rstl.put("user_id", geofence.get("USER_ID"));
+								rstl.put("geo_type", geofence.get("GEO_TYPE"));
+								rstl.put("geo_action", geofence.get("GEO_ACTION"));
+								rstl.put("max_alt", geofence.get("MAX_ALT"));								
+								rstl.put("created_at",geofence.get("CREATEDAT"));
+								rstl.put("lat0", geofence.get("lat0"));
+								rstl.put("lon0", geofence.get("lon0"));
+								
+								
+								list.add(rstl);
+								
+							}
+							
+							System.out.println("missons3 : "+list.toString());
+							
+							
+							result.put("count", geofences.size()+"");
+							result.put("geofences", list);
+
+							routingContext.response().putHeader("content-type", "application/json; charset=utf-8")
+							.end(result.toString());
+
+						} catch (ParseException e) {
+							// TODO Auto-generated catch block
+							promise.fail(e.getCause());
+							logger.error("failed parsing json getGeofences");
+
+						}
+						
+						promise.complete();
+						
+					}else {
+						promise.fail(reply.cause());
+						logger.error("failed executing inside vertx.selectQuery");
+						messageReturn.commonReturn(routingContext, MessageReturn.RC_VERTICLE_FAIL_CODE, MessageReturn.RC_VERTICLE_FAIL_REASON, isXML);
+					}
+					
+					
+				});
+				
+				return promise.future();
+				
+			});
+		
+		} catch(NullPointerException e) {
+			
+			logger.error("NullPointerException occurred");
+			messageReturn.commonReturn(routingContext, MessageReturn.RC_NULL_POINTER_EXCEPTION_CODE, MessageReturn.RC_NULL_POINTER_EXCEPTION_REASON, isXML);
+	
+		} catch(DecodeException e) {
+			
+			logger.error("DecodeException has occurred");
+			messageReturn.commonReturn(routingContext, MessageReturn.RC_DECODE_EXCEPTION_CODE, MessageReturn.RC_DECODE_EXCEPTION_REASON, isXML);
+	
+			
+		} catch(Exception e) {
+			
+			logger.error("Exception has occurred");
+			messageReturn.commonReturn(routingContext, MessageReturn.RC_EXCEPTION_CODE, MessageReturn.RC_EXCEPTION_REASON, isXML);
+	
+		}  
+		
+	}
+	/**
+	 * Select one query data with specified id
+	 * 
+	 * @param routingContext
+	 */
+	private void getGeofenceDetail(RoutingContext routingContext) {
+
+		logger.info("Entered getGeofenceDetail");
 		JSONParser parser = new JSONParser();
 		
 		try {
+			//JsonObject json = routingContext.getBodyAsJson();
+			//json.put(ADDR, "getMissionDetail");
 			
-			JsonObject json = routingContext.getBodyAsJson();
-			json.put(ADDR, "getCommandByService");
-			
-			String svcType = json.getString("service_type");
+			String geoId = routingContext.pathParam("geo_id");
+			String compId = routingContext.pathParam("comp_id");
 	
 			JSONObject colId = new JSONObject();					
-			colId.put(COL_ID, "2016");
+			colId.put(COL_ID, "2027");
+			colId.put("geo_id", geoId);
+			colId.put("comp_id", compId);
 			
-			Map<String, Object> rslt = new HashMap<>();
+			System.out.println("getGeofenceDetail getGeofences : "+colId.toString());
 			
-			rslt.put("geofences", new JSONArray());
-			rslt.put("count", "0");
+			//getGeofenceDetail Table
+			Future<JSONObject> fut2 = Future.future(promise -> eb.request("vertx.selectQuery", colId.toString(), reply -> {
+				
+				if(reply.succeeded()) {	
+					
+					try {
+						System.out.println("getGeofences reply result : "+reply.result().body().toString());
+						JSONArray result = (JSONArray) parser.parse(reply.result().body().toString());
+						JSONObject res =(JSONObject) result.get(0);
+						String code = "";
+						
+						//쿼리 오류 확인
+						if(res.get("code")!=null) {
+							code= res.get("code").toString();
+						}
+						
+						System.out.println("getGeofences result : "+result.toString());
+						System.out.println("getGeofences res : "+res.toString());
+						
+						//JSONObject mission =(JSONObject) reply.result().body();
+						//System.out.println("mission : "+mission.toString());
+						
+						//쿼리 오류 발생 시
+						if( !"".equals(code) &&  !"10002".equals(code)) {
+							logger.info("code : "+MSMessageReturn.ERR_RETRIEVE_DATA_CODE+", message : "+MSMessageReturn.ERR_RETRIEVE_DATA_MSG);
+							msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_RETRIEVE_DATA_CODE, MSMessageReturn.ERR_RETRIEVE_DATA_MSG, MSMessageReturn.STAT_ERROR);
+						}else if( !"".equals(code) && "10001".equals(code)){									
+							logger.info("code : "+MSMessageReturn.ERR_RETRIEVE_DATA_CODE+", message : "+MSMessageReturn.ERR_RETRIEVE_DATA_MSG);
+							msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_RETRIEVE_DATA_CODE, MSMessageReturn.ERR_RETRIEVE_DATA_MSG+"Not found mission : "+geoId, MSMessageReturn.STAT_ERROR);
+						}else {
+							
+							promise.complete(res);
+							
+						}
+						
+					} catch (ParseException e) {
+						promise.fail("fail!");
+						logger.error("failed parsing json insertMission");
+						messageReturn.commonReturn(routingContext, MessageReturn.RC_VERTICLE_FAIL_CODE, MessageReturn.RC_VERTICLE_FAIL_REASON, isXML);
+					}
+					
+					
+				}else {
+					logger.error("failed executing inside vertx.selectQuery");							
+					messageReturn.commonReturn(routingContext, MessageReturn.RC_VERTICLE_FAIL_CODE, MessageReturn.RC_VERTICLE_FAIL_REASON, isXML);					
+				}
+			}));
 			
-			routingContext.response().putHeader("content-type", "application/json; charset=utf-8")
-			.end(new Gson().toJson(rslt));
+			
+			fut2.compose(geofence -> {
+				Promise<List<Object>> promise = Promise.promise();
+				
+				colId.put(COL_ID, "2020");
+				
+				eb.request("vertx.selectQuery", colId.toString(), reply -> {
+					
+					if(reply.succeeded()) {	
+						
+						try {
+							JSONArray result = (JSONArray) parser.parse(reply.result().body().toString());
+							JSONObject res =(JSONObject) result.get(0);
+							String code = "";
+							
+							//쿼리 오류 확인
+							if(res.get("code")!=null) {
+								code= res.get("code").toString();
+							}
+							
+							System.out.println("getGeoPoints result : "+result.toString());
+							System.out.println("getGeoPoints res : "+res.toString());
+							
+							//JSONObject mission =(JSONObject) reply.result().body();
+							//System.out.println("mission : "+mission.toString());
+							
+							//쿼리 오류 발생 시
+							if( !"".equals(code) &&  !"10002".equals(code)) {
+								logger.info("code : "+MSMessageReturn.ERR_RETRIEVE_DATA_CODE+", message : "+MSMessageReturn.ERR_RETRIEVE_DATA_MSG);
+								msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_RETRIEVE_DATA_CODE, MSMessageReturn.ERR_RETRIEVE_DATA_MSG, MSMessageReturn.STAT_ERROR);
+							}else if( !"".equals(code) && "10001".equals(code)){									
+								logger.info("code : "+MSMessageReturn.ERR_RETRIEVE_DATA_CODE+", message : "+MSMessageReturn.ERR_RETRIEVE_DATA_MSG);
+								msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_RETRIEVE_DATA_CODE, MSMessageReturn.ERR_RETRIEVE_DATA_MSG+"Not found getGeoPoints : "+geoId, MSMessageReturn.STAT_ERROR);
+							}else {
+								
+								List<Object> lst = new ArrayList<Object>();
+								lst.add(geofence);
+								lst.add(result);
+								
+								promise.complete(lst);
+								
+							}
+							
+						} catch (ParseException e) {
+							promise.fail("fail!");
+							logger.error("failed parsing json insertMission");
+							messageReturn.commonReturn(routingContext, MessageReturn.RC_VERTICLE_FAIL_CODE, MessageReturn.RC_VERTICLE_FAIL_REASON, isXML);
+						}
+						
+						
+					}else {
+						logger.error("failed executing inside vertx.selectQuery");							
+						messageReturn.commonReturn(routingContext, MessageReturn.RC_VERTICLE_FAIL_CODE, MessageReturn.RC_VERTICLE_FAIL_REASON, isXML);					
+					}
+				});
+				
+				
+				return promise.future();
+				
+			}).onSuccess(objList->{
+				
+				JSONObject res = (JSONObject) objList.get(0);
+				JSONArray geoPointArr = (JSONArray) objList.get(1);				
+				
+				System.out.println("geofence res :"+res.toJSONString());
+				System.out.println("geoPointArr res :"+geoPointArr.toJSONString());
+				
+				List<Map<String, Object>> commands = new ArrayList<Map<String, Object>>();
+				
+				
+				for(int i=0; i<geoPointArr.size(); i++) {
+					Map<String, Object> map = new LinkedHashMap<>();
+					
+					JSONObject point = (JSONObject) geoPointArr.get(i);
+					String order = point.get("GEO_ORDER").toString();
+					String lat = point.get("GEO_LAT").toString();
+					String lon = point.get("GEO_LON").toString();
+					
+					map.put("idx", order);
+					map.put("lat", lat);
+					map.put("lng", lon);
+										
+					commands.add(map);
+				}
+				
+				//조회 필드 순서 때문에 재입력함(JsonObject 형식은 순서X)
+				Map<String, Object> result = new LinkedHashMap<>();
+				
+				result.put("geo_id", res.get("GEO_ID"));
+				result.put("geo_name", res.get("GEO_NAME"));
+				result.put("user_id", res.get("USER_ID"));
+				result.put("geo_type", res.get("GEO_TYPE"));
+				result.put("geo_action", res.get("GEO_ACTION"));
+				result.put("max_alt", res.get("MAX_ALT"));
+				result.put("count", geoPointArr.size()+"");//int -> string 변환
+				result.put("commands", commands);
+				result.put("created_at",res.get("CREATEDAT"));
+				
+				System.out.println("result res : "+result.toString());
+				
+				Gson gson = new Gson();
+				
+				System.out.println("result res2 : "+gson.toJson(result).toString());
+				
+				routingContext.response().putHeader("content-type", "application/json; charset=utf-8")
+				.end(gson.toJson(result).replace("\\", ""));
+				
+			}).onFailure(objList->{
+				logger.info("code : "+MSMessageReturn.ERR_CREATE_CODE+", message : "+MSMessageReturn.ERR_CREATE_MSG);
+				msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_CREATE_CODE, MSMessageReturn.ERR_CREATE_MSG, MSMessageReturn.STAT_ERROR);
+			});
 			
 		} catch(NullPointerException e) {
 			
@@ -3910,8 +4060,1264 @@ public class MSRoute extends AbstractVerticle {
 		}  
 
 	}
+	
+	private void insertGeofence(RoutingContext routingContext) {
+
+		logger.info("Entered insertGeofence");
+		JSONParser parser = new JSONParser();
+
+		try {
+			JsonObject json = routingContext.getBodyAsJson();
+			json.put(ADDR, "insertGeofence");
+			
+			System.out.println("json : "+json.toString());
+			
+			List<JSONObject> cmdList = new ArrayList<JSONObject>();
+			List<JSONObject> GEOFENCE = new ArrayList<JSONObject>();
+			List<JSONObject> GEOPOINT = new ArrayList<JSONObject>();
+			
+			String comp_id = json.getString("comp_id");
+			
+			JSONObject geofence = new JSONObject();
+			geofence.put("comp_id", comp_id);
+			geofence.put("geo_name", json.getString("geo_name"));
+			geofence.put("user_id", json.getString("user_id"));
+			geofence.put("geo_type", json.getString("geo_type"));
+			geofence.put("geo_action", json.getString("geo_action"));
+			geofence.put("max_alt", json.getString("max_alt"));
+			
+			GEOFENCE.add(geofence);
+			
+			boolean isValid = this.checkGEOParam(json.toString(), routingContext, cmdList);
+			
+			System.out.println("isValid : "+isValid);
+			
+			if(isValid) {
+				
+				for(int i=0; i<cmdList.size(); i++) {
+					JSONObject cmdObj = cmdList.get(i);
+					
+					JSONObject tempObj = new JSONObject();
+					
+					tempObj.put("geo_order", cmdObj.get("idx"));
+					tempObj.put("geo_lat", cmdObj.get("lat"));
+					tempObj.put("geo_lon", cmdObj.get("lng"));
+					tempObj.put("comp_id", json.getString("comp_id"));
+					
+					GEOPOINT.add(tempObj);
+				}
+				
+				Future<String> fut1 = Future.future(promise ->{
+					test = 1;
+					
+					Future<String> fut2 = this.chkGeofenceId((Promise<String>) promise, routingContext);
+					
+					this.reChkGeofenceId(fut2, (Promise<String>) promise, routingContext);
+					
+					promise.future();
+				});
+				
+				
+				fut1.compose(geofenceId ->{
+					Promise<String> promise = Promise.promise();
+					
+					GEOFENCE.get(0).put("geo_id", geofenceId);
+					
+					for(int i=0; i<GEOPOINT.size(); i++) {
+						GEOPOINT.get(i).put("geo_id", geofenceId);
+					}
+					
+					JSONObject insQueryId = GEOFENCE.get(0);//new JSONObject();
+					insQueryId.put(COL_ID, "2025");
+					System.out.println("insertGeofence : "+insQueryId.toString());
+					
+					//Geofence Table Insert
+					eb.request("vertx.selectQuery", insQueryId.toString(), reply -> {
+						
+						if(reply.succeeded()) {	
+							
+							try {
+								JSONArray result = (JSONArray) parser.parse(reply.result().body().toString());
+								JSONObject res =(JSONObject) result.get(0);
+								System.out.println("result : "+result.toString());
+								
+								//인써트 성공
+								if("10002".equals(res.get("code").toString())) {
+									promise.complete(geofenceId);
+								}else {
+									logger.error("failed executing inside vertx.selectQuery");
+									promise.fail("failed executing inside vertx.selectQuery");
+									messageReturn.commonReturn(routingContext, MessageReturn.RC_VERTICLE_FAIL_CODE, MessageReturn.RC_VERTICLE_FAIL_REASON, isXML);
+								}
+								
+							} catch (ParseException e) {
+								// TODO Auto-generated catch block
+								logger.error("failed parsing json addOneQueryManage");
+								promise.fail(e.getCause());
+							}
+							
+							
+						}else {
+							logger.error("failed executing inside vertx.selectQuery");
+							promise.fail("failed executing inside vertx.selectQuery");
+							messageReturn.commonReturn(routingContext, MessageReturn.RC_VERTICLE_FAIL_CODE, MessageReturn.RC_VERTICLE_FAIL_REASON, isXML);					
+						}
+					});	
+					
+					
+					return promise.future();
+				}).compose(geofenceId ->{
+					Promise<String> promise = Promise.promise();
+					
+					List<Future> futureList = new ArrayList<>();
+					//Geopoint Table insert
+					for(int i=0; i<GEOPOINT.size(); i++) {
+						JSONObject insQueryId = GEOPOINT.get(i);//new JSONObject();
+						insQueryId.put(COL_ID, "2021");					
+						
+						//System.out.println("insertCommandList : "+insQueryId.toString());
+						//Mission Table Insert
+						Future<String> fut2 = this.insertList(insQueryId, routingContext);
+						futureList.add(fut2);
+							
+					}
+					
+					CompositeFuture.all(futureList).onComplete(ar2 -> {
+						System.out.println("insertCommandList complete");
+						
+						if(ar2.succeeded()) {
+							//System.out.println("success complete");
+							promise.complete(geofenceId);
+						}else {
+							//System.out.println("fail complete");
+							promise.fail("fail!");
+						}
+						
+					});
+					
+					return promise.future();
+				}).onSuccess(geofenceId->{
+					
+					JSONObject colId = new JSONObject();					
+					colId.put(COL_ID, "2027");
+					colId.put("geo_id", geofenceId);
+					colId.put("comp_id", comp_id);
+					
+					System.out.println("getGeofenceDetail getGeofences : "+colId.toString());
+					
+					//getGeofenceDetail Table
+					Future<JSONObject> fut2 = Future.future(promise -> eb.request("vertx.selectQuery", colId.toString(), reply -> {
+						
+						if(reply.succeeded()) {	
+							
+							try {
+								System.out.println("getGeofences reply result : "+reply.result().body().toString());
+								JSONArray result = (JSONArray) parser.parse(reply.result().body().toString());
+								JSONObject res =(JSONObject) result.get(0);
+								String code = "";
+								
+								//쿼리 오류 확인
+								if(res.get("code")!=null) {
+									code= res.get("code").toString();
+								}
+								
+								System.out.println("getGeofences result : "+result.toString());
+								System.out.println("getGeofences res : "+res.toString());
+								
+								//JSONObject mission =(JSONObject) reply.result().body();
+								//System.out.println("mission : "+mission.toString());
+								
+								//쿼리 오류 발생 시
+								if( !"".equals(code) &&  !"10002".equals(code)) {
+									logger.info("code : "+MSMessageReturn.ERR_RETRIEVE_DATA_CODE+", message : "+MSMessageReturn.ERR_RETRIEVE_DATA_MSG);
+									msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_RETRIEVE_DATA_CODE, MSMessageReturn.ERR_RETRIEVE_DATA_MSG, MSMessageReturn.STAT_ERROR);
+								}else if( !"".equals(code) && "10001".equals(code)){									
+									logger.info("code : "+MSMessageReturn.ERR_RETRIEVE_DATA_CODE+", message : "+MSMessageReturn.ERR_RETRIEVE_DATA_MSG);
+									msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_RETRIEVE_DATA_CODE, MSMessageReturn.ERR_RETRIEVE_DATA_MSG+"Not found mission : "+geofenceId, MSMessageReturn.STAT_ERROR);
+								}else {
+									
+									promise.complete(res);
+									
+								}
+								
+							} catch (ParseException e) {
+								promise.fail("fail!");
+								logger.error("failed parsing json insertMission");
+								messageReturn.commonReturn(routingContext, MessageReturn.RC_VERTICLE_FAIL_CODE, MessageReturn.RC_VERTICLE_FAIL_REASON, isXML);
+							}
+							
+							
+						}else {
+							logger.error("failed executing inside vertx.selectQuery");							
+							messageReturn.commonReturn(routingContext, MessageReturn.RC_VERTICLE_FAIL_CODE, MessageReturn.RC_VERTICLE_FAIL_REASON, isXML);					
+						}
+					}));
+					
+					
+					fut2.compose(geofences -> {
+						Promise<List<Object>> promise = Promise.promise();
+						
+						colId.put(COL_ID, "2020");
+						String geoId = (String) colId.get("geo_id");
+						
+						eb.request("vertx.selectQuery", colId.toString(), reply -> {
+							
+							if(reply.succeeded()) {	
+								
+								try {
+									JSONArray result = (JSONArray) parser.parse(reply.result().body().toString());
+									JSONObject res =(JSONObject) result.get(0);
+									String code = "";
+									
+									//쿼리 오류 확인
+									if(res.get("code")!=null) {
+										code= res.get("code").toString();
+									}
+									
+									System.out.println("getGeoPoints result : "+result.toString());
+									System.out.println("getGeoPoints res : "+res.toString());
+									
+									//JSONObject mission =(JSONObject) reply.result().body();
+									//System.out.println("mission : "+mission.toString());
+									
+									//쿼리 오류 발생 시
+									if( !"".equals(code) &&  !"10002".equals(code)) {
+										logger.info("code : "+MSMessageReturn.ERR_RETRIEVE_DATA_CODE+", message : "+MSMessageReturn.ERR_RETRIEVE_DATA_MSG);
+										msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_RETRIEVE_DATA_CODE, MSMessageReturn.ERR_RETRIEVE_DATA_MSG, MSMessageReturn.STAT_ERROR);
+									}else if( !"".equals(code) && "10001".equals(code)){									
+										logger.info("code : "+MSMessageReturn.ERR_RETRIEVE_DATA_CODE+", message : "+MSMessageReturn.ERR_RETRIEVE_DATA_MSG);
+										msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_RETRIEVE_DATA_CODE, MSMessageReturn.ERR_RETRIEVE_DATA_MSG+"Not found getGeoPoints : "+geoId, MSMessageReturn.STAT_ERROR);
+									}else {
+										
+										List<Object> lst = new ArrayList<Object>();
+										lst.add(geofences);
+										lst.add(result);
+										
+										promise.complete(lst);
+										
+									}
+									
+								} catch (ParseException e) {
+									promise.fail("fail!");
+									logger.error("failed parsing json insertMission");
+									messageReturn.commonReturn(routingContext, MessageReturn.RC_VERTICLE_FAIL_CODE, MessageReturn.RC_VERTICLE_FAIL_REASON, isXML);
+								}
+								
+								
+							}else {
+								logger.error("failed executing inside vertx.selectQuery");							
+								messageReturn.commonReturn(routingContext, MessageReturn.RC_VERTICLE_FAIL_CODE, MessageReturn.RC_VERTICLE_FAIL_REASON, isXML);					
+							}
+						});
+						
+						
+						return promise.future();
+						
+					}).onSuccess(objList->{
+						
+						JSONObject res = (JSONObject) objList.get(0);
+						JSONArray geoPointArr = (JSONArray) objList.get(1);				
+						
+						System.out.println("geofence res :"+res.toJSONString());
+						System.out.println("geoPointArr res :"+geoPointArr.toJSONString());
+						
+						List<Map<String, Object>> commands = new ArrayList<Map<String, Object>>();
+						
+						
+						for(int i=0; i<geoPointArr.size(); i++) {
+							Map<String, Object> map = new LinkedHashMap<>();
+							
+							JSONObject point = (JSONObject) geoPointArr.get(i);
+							String order = point.get("GEO_ORDER").toString();
+							String lat = point.get("GEO_LAT").toString();
+							String lon = point.get("GEO_LON").toString();
+							
+							map.put("idx", order);
+							map.put("lat", lat);
+							map.put("lng", lon);
+												
+							commands.add(map);
+						}
+						
+						//조회 필드 순서 때문에 재입력함(JsonObject 형식은 순서X)
+						Map<String, Object> result = new LinkedHashMap<>();
+						
+						result.put("geo_id", res.get("GEO_ID"));
+						result.put("geo_name", res.get("GEO_NAME"));
+						result.put("user_id", res.get("USER_ID"));
+						result.put("geo_type", res.get("GEO_TYPE"));
+						result.put("geo_action", res.get("GEO_ACTION"));
+						result.put("max_alt", res.get("MAX_ALT"));
+						result.put("count", geoPointArr.size()+"");//int -> string 변환
+						result.put("commands", commands);
+						result.put("created_at",res.get("CREATEDAT"));
+						
+						System.out.println("result res : "+result.toString());
+						
+						Gson gson = new Gson();
+						
+						System.out.println("result res2 : "+gson.toJson(result).toString());
+						
+						routingContext.response().putHeader("content-type", "application/json; charset=utf-8")
+						.end(gson.toJson(result).replace("\\", ""));
+						
+					}).onFailure(objList->{
+						logger.info("code : "+MSMessageReturn.ERR_CREATE_CODE+", message : "+MSMessageReturn.ERR_CREATE_MSG);
+						msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_CREATE_CODE, MSMessageReturn.ERR_CREATE_MSG, MSMessageReturn.STAT_ERROR);
+					});
+					
+				});
+				
+			}
 			
 			
+		// 정보를 입력하지 않았을 시 
+		} catch(NullPointerException e) {
+			
+			logger.error("NullPointerException occurred");
+			messageReturn.commonReturn(routingContext, MessageReturn.RC_NULL_POINTER_EXCEPTION_CODE, MessageReturn.RC_NULL_POINTER_EXCEPTION_REASON, isXML);
+	
+		} catch(DecodeException e) {
+			
+			logger.error("DecodeException has occurred");
+			messageReturn.commonReturn(routingContext, MessageReturn.RC_DECODE_EXCEPTION_CODE, MessageReturn.RC_DECODE_EXCEPTION_REASON, isXML);
+	
+			
+		} catch(Exception e) {
+			
+			logger.error("Exception has occurred");
+			messageReturn.commonReturn(routingContext, MessageReturn.RC_EXCEPTION_CODE, MessageReturn.RC_EXCEPTION_REASON, isXML);
+	
+		} 
+		
+	}
+	
+	private void updateGeofence(RoutingContext routingContext) {
+
+		logger.info("Entered updateGeofence");
+		JSONParser parser = new JSONParser();
+
+		try {
+			JsonObject json = routingContext.getBodyAsJson();
+			json.put(ADDR, "updateGeofence");
+			
+			System.out.println("json : "+json.toString());
+			
+			List<JSONObject> cmdList = new ArrayList<JSONObject>();
+			List<JSONObject> GEOFENCE = new ArrayList<JSONObject>();
+			List<JSONObject> GEOPOINT = new ArrayList<JSONObject>();
+			
+			String geo_id = json.getString("geo_id");
+			String comp_id = json.getString("comp_id");
+			
+			boolean isValid = this.checkGEOParam(json.toString(), routingContext, cmdList);
+			
+			System.out.println("isValid : "+isValid);
+			
+			if(isValid) {
+								
+				JSONObject queryParam = new JSONObject();
+				queryParam.put(COL_ID, "2027");
+				queryParam.put("geo_id", geo_id);
+				queryParam.put("comp_id", comp_id);
+				
+				Future<String> fut1 = Future.future(promise -> eb.request("vertx.selectQuery", queryParam.toString(), reply -> {
+					
+					if(reply.succeeded()) {
+						
+						JSONArray gefences = null;					
+						
+						String res = reply.result().body().toString();
+						
+						System.out.println("res : "+res);					
+
+						try {
+							
+							gefences = (JSONArray) parser.parse(res);
+							
+							System.out.println("gefences : "+gefences.toJSONString());
+							System.out.println("gefences : "+gefences.get(0));
+							
+							JSONObject queryRes = (JSONObject) gefences.get(0);
+							String queryResCd = "";
+							if(queryRes.get("code") != null) {
+								queryResCd = queryRes.get("code").toString();
+							}
+							
+							//정상 조회 시
+							if( "".equals(queryResCd) && gefences.size() >= 0 ) {
+								promise.complete(geo_id);
+							}
+							//쿼리 결과만 리턴 되고 그 결과가 정상(10002)이 아닐 때
+							else if( !"10002".equals(queryResCd) ) {
+								logger.error("code : "+MSMessageReturn.ERR_DELETE_CODE+", message : "+MSMessageReturn.ERR_DELETE_MSG);
+								msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_DELETE_CODE, MSMessageReturn.ERR_DELETE_MSG, MSMessageReturn.STAT_ERROR);
+								promise.fail(geo_id);
+							}
+							
+						} catch (ParseException e) {
+							// TODO Auto-generated catch block
+							logger.error("failed parsing json deleteMission");
+							promise.fail(e.getCause());
+						}
+						
+					} else {
+		
+						logger.error("failed executing inside vertx.queryManage");
+						messageReturn.commonReturn(routingContext, MessageReturn.RC_VERTICLE_FAIL_CODE, MessageReturn.RC_VERTICLE_FAIL_REASON, isXML);
+					}
+				}));
+				
+				
+				fut1.compose(result ->{
+					Promise<String> promise = Promise.promise();
+					
+					JSONObject queryParam2 = new JSONObject();
+					queryParam2.put(COL_ID, "2023");
+					queryParam2.put("geo_id", result);
+					
+					System.out.println("DeleteGeopoints param : "+queryParam2.toString());
+					
+					//DeleteAttributes
+					eb.request("vertx.selectQuery", queryParam2.toString(), reply -> {
+						
+						if(reply.succeeded()) {		
+							
+							JSONArray geopoints = null;
+							
+							String res = reply.result().body().toString();
+							
+							System.out.println("res : "+res);
+							
+							try {
+								
+								geopoints = (JSONArray) parser.parse(res);
+								
+								System.out.println("geopoints : "+geopoints.toJSONString());
+								System.out.println("geopoints : "+geopoints.get(0));
+								
+								JSONObject queryRes = (JSONObject) geopoints.get(0);
+								String queryResCd = queryRes.get("code").toString();
+								
+								//정상 삭제 시
+								if( "10002".equals(queryResCd) ) {
+									logger.info("DeleteGeopoints Success : "+result);								
+									promise.complete(geo_id);
+								}else {
+									logger.error("code : "+MSMessageReturn.ERR_DELETE_CODE+", message : "+MSMessageReturn.ERR_DELETE_MSG);
+									msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_DELETE_CODE, MSMessageReturn.ERR_DELETE_MSG, MSMessageReturn.STAT_ERROR);
+									promise.fail(geo_id);
+								}
+								
+							} catch (ParseException e) {
+								// TODO Auto-generated catch block
+								logger.error("failed parsing json deleteGeopoints");
+								promise.fail(e.getCause());
+							}
+							
+							//promise.complete(result);
+							
+						} else {
+			
+							logger.error("code : "+MSMessageReturn.ERR_DELETE_CODE+", message : "+MSMessageReturn.ERR_DELETE_MSG);
+							msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_DELETE_CODE, MSMessageReturn.ERR_DELETE_MSG, MSMessageReturn.STAT_ERROR);
+							promise.fail(result);
+						}
+					});				
+					
+					return promise.future();
+					
+				}).compose(result ->{
+					Promise<String> promise = Promise.promise();
+					
+					JSONObject queryParam2 = new JSONObject();
+					queryParam2.put(COL_ID, "2022");
+					queryParam2.put("geo_id", result);
+					
+					System.out.println("DeleteGeofence param : "+queryParam2.toString());
+					
+					//DeleteMission
+					eb.request("vertx.selectQuery", queryParam2.toString(), reply -> {
+						
+						if(reply.succeeded()) {		
+							
+							JSONArray geofences = null;
+							
+							String res = reply.result().body().toString();
+							
+							System.out.println("res : "+res);
+							
+							try {
+								
+								geofences = (JSONArray) parser.parse(res);
+								
+								System.out.println("geofences : "+geofences.toJSONString());
+								System.out.println("geofences : "+geofences.get(0));
+								
+								JSONObject queryRes = (JSONObject) geofences.get(0);
+								String queryResCd = queryRes.get("code").toString();
+								
+								//정상 삭제 시
+								if( "10002".equals(queryResCd) ) {
+									logger.info("DeleteGeofence Success : "+result);								
+									promise.complete(geo_id);
+								}else {
+									logger.error("code : "+MSMessageReturn.ERR_DELETE_CODE+", message : "+MSMessageReturn.ERR_DELETE_MSG);
+									msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_DELETE_CODE, MSMessageReturn.ERR_DELETE_MSG, MSMessageReturn.STAT_ERROR);
+									promise.fail(geo_id);
+								}
+								
+							} catch (ParseException e) {
+								// TODO Auto-generated catch block
+								logger.error("failed parsing json deleteGeofence");
+								promise.fail(e.getCause());
+							}
+							
+							//promise.complete(result);
+							
+						} else {
+			
+							logger.error("code : "+MSMessageReturn.ERR_DELETE_CODE+", message : "+MSMessageReturn.ERR_DELETE_MSG);
+							msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_DELETE_CODE, MSMessageReturn.ERR_DELETE_MSG, MSMessageReturn.STAT_ERROR) ;
+							promise.fail(result);
+						}
+					});				
+									
+					return promise.future();
+					
+				}).compose(geofenceId ->{
+					Promise<String> promise = Promise.promise();
+					
+					JSONObject geofence = new JSONObject();
+					geofence.put("comp_id", comp_id);
+					geofence.put("geo_name", json.getString("geo_name"));
+					geofence.put("user_id", json.getString("user_id"));
+					geofence.put("geo_type", json.getString("geo_type"));
+					geofence.put("geo_action", json.getString("geo_action"));
+					geofence.put("max_alt", json.getString("max_alt"));
+					
+					GEOFENCE.add(geofence);
+					
+					for(int i=0; i<cmdList.size(); i++) {
+						JSONObject cmdObj = cmdList.get(i);
+						
+						JSONObject tempObj = new JSONObject();
+						
+						tempObj.put("geo_order", cmdObj.get("idx"));
+						tempObj.put("geo_lat", cmdObj.get("lat"));
+						tempObj.put("geo_lon", cmdObj.get("lng"));
+						tempObj.put("comp_id", json.getString("comp_id"));
+						
+						GEOPOINT.add(tempObj);
+					}
+					
+					GEOFENCE.get(0).put("geo_id", geofenceId);
+					
+					for(int i=0; i<GEOPOINT.size(); i++) {
+						GEOPOINT.get(i).put("geo_id", geofenceId);
+					}
+					
+					JSONObject insQueryId = GEOFENCE.get(0);//new JSONObject();
+					insQueryId.put(COL_ID, "2025");
+					System.out.println("insertGeofence : "+insQueryId.toString());
+					
+					//Geofence Table Insert
+					eb.request("vertx.selectQuery", insQueryId.toString(), reply -> {
+						
+						if(reply.succeeded()) {	
+							
+							try {
+								JSONArray result = (JSONArray) parser.parse(reply.result().body().toString());
+								JSONObject res =(JSONObject) result.get(0);
+								System.out.println("result : "+result.toString());
+								
+								//인써트 성공
+								if("10002".equals(res.get("code").toString())) {
+									promise.complete(geofenceId);
+								}else {
+									logger.error("failed executing inside vertx.selectQuery");
+									promise.fail("failed executing inside vertx.selectQuery");
+									messageReturn.commonReturn(routingContext, MessageReturn.RC_VERTICLE_FAIL_CODE, MessageReturn.RC_VERTICLE_FAIL_REASON, isXML);
+								}
+								
+							} catch (ParseException e) {
+								// TODO Auto-generated catch block
+								logger.error("failed parsing json addOneQueryManage");
+								promise.fail(e.getCause());
+							}
+							
+							
+						}else {
+							logger.error("failed executing inside vertx.selectQuery");
+							promise.fail("failed executing inside vertx.selectQuery");
+							messageReturn.commonReturn(routingContext, MessageReturn.RC_VERTICLE_FAIL_CODE, MessageReturn.RC_VERTICLE_FAIL_REASON, isXML);					
+						}
+					});	
+					
+					
+					return promise.future();
+				}).compose(geofenceId ->{
+					Promise<String> promise = Promise.promise();
+					
+					List<Future> futureList = new ArrayList<>();
+					//Geopoint Table insert
+					for(int i=0; i<GEOPOINT.size(); i++) {
+						JSONObject insQueryId = GEOPOINT.get(i);//new JSONObject();
+						insQueryId.put(COL_ID, "2021");					
+						
+						//System.out.println("insertCommandList : "+insQueryId.toString());
+						//Mission Table Insert
+						Future<String> fut2 = this.insertList(insQueryId, routingContext);
+						futureList.add(fut2);
+							
+					}
+					
+					CompositeFuture.all(futureList).onComplete(ar2 -> {
+						System.out.println("insertCommandList complete");
+						
+						if(ar2.succeeded()) {
+							//System.out.println("success complete");
+							promise.complete(geofenceId);
+						}else {
+							//System.out.println("fail complete");
+							promise.fail("fail!");
+						}
+						
+					});
+					
+					return promise.future();
+				}).onSuccess(geofenceId->{
+					
+					JSONObject colId = new JSONObject();					
+					colId.put(COL_ID, "2027");
+					colId.put("geo_id", geofenceId);
+					colId.put("comp_id", comp_id);
+					
+					System.out.println("getGeofenceDetail getGeofences : "+colId.toString());
+					
+					//getGeofenceDetail Table
+					Future<JSONObject> fut2 = Future.future(promise -> eb.request("vertx.selectQuery", colId.toString(), reply -> {
+						
+						if(reply.succeeded()) {	
+							
+							try {
+								System.out.println("getGeofences reply result : "+reply.result().body().toString());
+								JSONArray result = (JSONArray) parser.parse(reply.result().body().toString());
+								JSONObject res =(JSONObject) result.get(0);
+								String code = "";
+								
+								//쿼리 오류 확인
+								if(res.get("code")!=null) {
+									code= res.get("code").toString();
+								}
+								
+								System.out.println("getGeofences result : "+result.toString());
+								System.out.println("getGeofences res : "+res.toString());
+								
+								//JSONObject mission =(JSONObject) reply.result().body();
+								//System.out.println("mission : "+mission.toString());
+								
+								//쿼리 오류 발생 시
+								if( !"".equals(code) &&  !"10002".equals(code)) {
+									logger.info("code : "+MSMessageReturn.ERR_RETRIEVE_DATA_CODE+", message : "+MSMessageReturn.ERR_RETRIEVE_DATA_MSG);
+									msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_RETRIEVE_DATA_CODE, MSMessageReturn.ERR_RETRIEVE_DATA_MSG, MSMessageReturn.STAT_ERROR);
+								}else if( !"".equals(code) && "10001".equals(code)){									
+									logger.info("code : "+MSMessageReturn.ERR_RETRIEVE_DATA_CODE+", message : "+MSMessageReturn.ERR_RETRIEVE_DATA_MSG);
+									msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_RETRIEVE_DATA_CODE, MSMessageReturn.ERR_RETRIEVE_DATA_MSG+"Not found mission : "+geofenceId, MSMessageReturn.STAT_ERROR);
+								}else {
+									
+									promise.complete(res);
+									
+								}
+								
+							} catch (ParseException e) {
+								promise.fail("fail!");
+								logger.error("failed parsing json insertMission");
+								messageReturn.commonReturn(routingContext, MessageReturn.RC_VERTICLE_FAIL_CODE, MessageReturn.RC_VERTICLE_FAIL_REASON, isXML);
+							}
+							
+							
+						}else {
+							logger.error("failed executing inside vertx.selectQuery");							
+							messageReturn.commonReturn(routingContext, MessageReturn.RC_VERTICLE_FAIL_CODE, MessageReturn.RC_VERTICLE_FAIL_REASON, isXML);					
+						}
+					}));
+					
+					
+					fut2.compose(geofences -> {
+						Promise<List<Object>> promise = Promise.promise();
+						
+						colId.put(COL_ID, "2020");
+						String geoId = (String) colId.get("geo_id");
+						
+						eb.request("vertx.selectQuery", colId.toString(), reply -> {
+							
+							if(reply.succeeded()) {	
+								
+								try {
+									JSONArray result = (JSONArray) parser.parse(reply.result().body().toString());
+									JSONObject res =(JSONObject) result.get(0);
+									String code = "";
+									
+									//쿼리 오류 확인
+									if(res.get("code")!=null) {
+										code= res.get("code").toString();
+									}
+									
+									System.out.println("getGeoPoints result : "+result.toString());
+									System.out.println("getGeoPoints res : "+res.toString());
+									
+									//JSONObject mission =(JSONObject) reply.result().body();
+									//System.out.println("mission : "+mission.toString());
+									
+									//쿼리 오류 발생 시
+									if( !"".equals(code) &&  !"10002".equals(code)) {
+										logger.info("code : "+MSMessageReturn.ERR_RETRIEVE_DATA_CODE+", message : "+MSMessageReturn.ERR_RETRIEVE_DATA_MSG);
+										msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_RETRIEVE_DATA_CODE, MSMessageReturn.ERR_RETRIEVE_DATA_MSG, MSMessageReturn.STAT_ERROR);
+									}else if( !"".equals(code) && "10001".equals(code)){									
+										logger.info("code : "+MSMessageReturn.ERR_RETRIEVE_DATA_CODE+", message : "+MSMessageReturn.ERR_RETRIEVE_DATA_MSG);
+										msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_RETRIEVE_DATA_CODE, MSMessageReturn.ERR_RETRIEVE_DATA_MSG+"Not found getGeoPoints : "+geoId, MSMessageReturn.STAT_ERROR);
+									}else {
+										
+										List<Object> lst = new ArrayList<Object>();
+										lst.add(geofences);
+										lst.add(result);
+										
+										promise.complete(lst);
+										
+									}
+									
+								} catch (ParseException e) {
+									promise.fail("fail!");
+									logger.error("failed parsing json insertMission");
+									messageReturn.commonReturn(routingContext, MessageReturn.RC_VERTICLE_FAIL_CODE, MessageReturn.RC_VERTICLE_FAIL_REASON, isXML);
+								}
+								
+								
+							}else {
+								logger.error("failed executing inside vertx.selectQuery");							
+								messageReturn.commonReturn(routingContext, MessageReturn.RC_VERTICLE_FAIL_CODE, MessageReturn.RC_VERTICLE_FAIL_REASON, isXML);					
+							}
+						});
+						
+						
+						return promise.future();
+						
+					}).onSuccess(objList->{
+						
+						JSONObject res = (JSONObject) objList.get(0);
+						JSONArray geoPointArr = (JSONArray) objList.get(1);				
+						
+						System.out.println("geofence res :"+res.toJSONString());
+						System.out.println("geoPointArr res :"+geoPointArr.toJSONString());
+						
+						List<Map<String, Object>> commands = new ArrayList<Map<String, Object>>();
+						
+						
+						for(int i=0; i<geoPointArr.size(); i++) {
+							Map<String, Object> map = new LinkedHashMap<>();
+							
+							JSONObject point = (JSONObject) geoPointArr.get(i);
+							String order = point.get("GEO_ORDER").toString();
+							String lat = point.get("GEO_LAT").toString();
+							String lon = point.get("GEO_LON").toString();
+							
+							map.put("idx", order);
+							map.put("lat", lat);
+							map.put("lng", lon);
+												
+							commands.add(map);
+						}
+						
+						//조회 필드 순서 때문에 재입력함(JsonObject 형식은 순서X)
+						Map<String, Object> result = new LinkedHashMap<>();
+						
+						result.put("geo_id", res.get("GEO_ID"));
+						result.put("geo_name", res.get("GEO_NAME"));
+						result.put("user_id", res.get("USER_ID"));
+						result.put("geo_type", res.get("GEO_TYPE"));
+						result.put("geo_action", res.get("GEO_ACTION"));
+						result.put("max_alt", res.get("MAX_ALT"));
+						result.put("count", geoPointArr.size()+"");//int -> string 변환
+						result.put("commands", commands);
+						result.put("created_at",res.get("CREATEDAT"));
+						
+						System.out.println("result res : "+result.toString());
+						
+						Gson gson = new Gson();
+						
+						System.out.println("result res2 : "+gson.toJson(result).toString());
+						
+						routingContext.response().putHeader("content-type", "application/json; charset=utf-8")
+						.end(gson.toJson(result).replace("\\", ""));
+						
+					}).onFailure(objList->{
+						logger.info("code : "+MSMessageReturn.ERR_CREATE_CODE+", message : "+MSMessageReturn.ERR_CREATE_MSG);
+						msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_CREATE_CODE, MSMessageReturn.ERR_CREATE_MSG, MSMessageReturn.STAT_ERROR);
+					});
+					
+				});
+				
+			}
+			
+			
+		// 정보를 입력하지 않았을 시 
+		} catch(NullPointerException e) {
+			
+			logger.error("NullPointerException occurred");
+			messageReturn.commonReturn(routingContext, MessageReturn.RC_NULL_POINTER_EXCEPTION_CODE, MessageReturn.RC_NULL_POINTER_EXCEPTION_REASON, isXML);
+	
+		} catch(DecodeException e) {
+			
+			logger.error("DecodeException has occurred");
+			messageReturn.commonReturn(routingContext, MessageReturn.RC_DECODE_EXCEPTION_CODE, MessageReturn.RC_DECODE_EXCEPTION_REASON, isXML);
+	
+			
+		} catch(Exception e) {
+			
+			logger.error("Exception has occurred");
+			messageReturn.commonReturn(routingContext, MessageReturn.RC_EXCEPTION_CODE, MessageReturn.RC_EXCEPTION_REASON, isXML);
+	
+		} 
+		
+	}
+	
+	private void deleteGeofence(RoutingContext routingContext) {
+		
+		logger.info("Entered deleteGeofence");
+		JSONParser parser = new JSONParser();
+		
+		try {
+
+			JsonObject json = routingContext.getBodyAsJson();
+			//json.put(ADDR, "deleteMission");
+			
+			String geo_id = json.getString("geo_id");
+			String comp_id = json.getString("comp_id");
+			
+			if( "".equals(geo_id) || geo_id == null) {
+				logger.error("code : "+MSMessageReturn.ERR_MDT_PARAM_MISS_CODE+", message : "+MSMessageReturn.ERR_MDT_PARAM_MISS_MSG+"mission_id");
+				msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_MDT_PARAM_MISS_CODE, MSMessageReturn.ERR_MDT_PARAM_MISS_MSG+"mission_id", MSMessageReturn.STAT_ERROR);
+			}
+						
+			System.out.println("deleteGeofence param : "+json.toString());
+				
+			JSONObject queryParam = new JSONObject();
+			queryParam.put(COL_ID, "2027");
+			queryParam.put("geo_id", geo_id);
+			queryParam.put("comp_id", comp_id);
+			
+			Future<String> fut1 = Future.future(promise -> eb.request("vertx.selectQuery", queryParam.toString(), reply -> {
+				
+				if(reply.succeeded()) {
+					
+					JSONArray gefences = null;					
+					
+					String res = reply.result().body().toString();
+					
+					System.out.println("res : "+res);					
+
+					try {
+						
+						gefences = (JSONArray) parser.parse(res);
+						
+						System.out.println("gefences : "+gefences.toJSONString());
+						System.out.println("gefences : "+gefences.get(0));
+						
+						JSONObject queryRes = (JSONObject) gefences.get(0);
+						String queryResCd = "";
+						if(queryRes.get("code") != null) {
+							queryResCd = queryRes.get("code").toString();
+						}
+						
+						//정상 조회 시
+						if( "".equals(queryResCd) && gefences.size() >= 0 ) {
+							promise.complete(geo_id);
+						}
+						//쿼리 결과만 리턴 되고 그 결과가 정상(10002)이 아닐 때
+						else if( !"10002".equals(queryResCd) ) {
+							logger.error("code : "+MSMessageReturn.ERR_DELETE_CODE+", message : "+MSMessageReturn.ERR_DELETE_MSG);
+							msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_DELETE_CODE, MSMessageReturn.ERR_DELETE_MSG, MSMessageReturn.STAT_ERROR);
+							promise.fail(geo_id);
+						}
+						
+					} catch (ParseException e) {
+						// TODO Auto-generated catch block
+						logger.error("failed parsing json deleteMission");
+						promise.fail(e.getCause());
+					}
+					
+				} else {
+	
+					logger.error("failed executing inside vertx.queryManage");
+					messageReturn.commonReturn(routingContext, MessageReturn.RC_VERTICLE_FAIL_CODE, MessageReturn.RC_VERTICLE_FAIL_REASON, isXML);
+				}
+			}));
+			
+			
+			fut1.compose(result ->{
+				Promise<String> promise = Promise.promise();
+				
+				JSONObject queryParam2 = new JSONObject();
+				queryParam2.put(COL_ID, "2023");
+				queryParam2.put("geo_id", result);
+				
+				System.out.println("DeleteGeopoints param : "+queryParam2.toString());
+				
+				//DeleteAttributes
+				eb.request("vertx.selectQuery", queryParam2.toString(), reply -> {
+					
+					if(reply.succeeded()) {		
+						
+						JSONArray geopoints = null;
+						
+						String res = reply.result().body().toString();
+						
+						System.out.println("res : "+res);
+						
+						try {
+							
+							geopoints = (JSONArray) parser.parse(res);
+							
+							System.out.println("geopoints : "+geopoints.toJSONString());
+							System.out.println("geopoints : "+geopoints.get(0));
+							
+							JSONObject queryRes = (JSONObject) geopoints.get(0);
+							String queryResCd = queryRes.get("code").toString();
+							
+							//정상 삭제 시
+							if( "10002".equals(queryResCd) ) {
+								logger.info("DeleteGeopoints Success : "+result);								
+								promise.complete(geo_id);
+							}else {
+								logger.error("code : "+MSMessageReturn.ERR_DELETE_CODE+", message : "+MSMessageReturn.ERR_DELETE_MSG);
+								msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_DELETE_CODE, MSMessageReturn.ERR_DELETE_MSG, MSMessageReturn.STAT_ERROR);
+								promise.fail(geo_id);
+							}
+							
+						} catch (ParseException e) {
+							// TODO Auto-generated catch block
+							logger.error("failed parsing json deleteGeopoints");
+							promise.fail(e.getCause());
+						}
+						
+						//promise.complete(result);
+						
+					} else {
+		
+						logger.error("code : "+MSMessageReturn.ERR_DELETE_CODE+", message : "+MSMessageReturn.ERR_DELETE_MSG);
+						msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_DELETE_CODE, MSMessageReturn.ERR_DELETE_MSG, MSMessageReturn.STAT_ERROR);
+						promise.fail(result);
+					}
+				});				
+				
+				return promise.future();
+				
+			}).compose(result ->{
+				Promise<String> promise = Promise.promise();
+				
+				JSONObject queryParam2 = new JSONObject();
+				queryParam2.put(COL_ID, "2022");
+				queryParam2.put("geo_id", result);
+				
+				System.out.println("DeleteGeofence param : "+queryParam2.toString());
+				
+				//DeleteMission
+				eb.request("vertx.selectQuery", queryParam2.toString(), reply -> {
+					
+					if(reply.succeeded()) {		
+						
+						JSONArray geofences = null;
+						
+						String res = reply.result().body().toString();
+						
+						System.out.println("res : "+res);
+						
+						try {
+							
+							geofences = (JSONArray) parser.parse(res);
+							
+							System.out.println("geofences : "+geofences.toJSONString());
+							System.out.println("geofences : "+geofences.get(0));
+							
+							JSONObject queryRes = (JSONObject) geofences.get(0);
+							String queryResCd = queryRes.get("code").toString();
+							
+							//정상 삭제 시
+							if( "10002".equals(queryResCd) ) {
+								logger.info("DeleteGeofence Success : "+result);								
+								promise.complete(geo_id);
+							}else {
+								logger.error("code : "+MSMessageReturn.ERR_DELETE_CODE+", message : "+MSMessageReturn.ERR_DELETE_MSG);
+								msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_DELETE_CODE, MSMessageReturn.ERR_DELETE_MSG, MSMessageReturn.STAT_ERROR);
+								promise.fail(geo_id);
+							}
+							
+						} catch (ParseException e) {
+							// TODO Auto-generated catch block
+							logger.error("failed parsing json deleteGeofence");
+							promise.fail(e.getCause());
+						}
+						
+						//promise.complete(result);
+						
+					} else {
+		
+						logger.error("code : "+MSMessageReturn.ERR_DELETE_CODE+", message : "+MSMessageReturn.ERR_DELETE_MSG);
+						msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_DELETE_CODE, MSMessageReturn.ERR_DELETE_MSG, MSMessageReturn.STAT_ERROR) ;
+						promise.fail(result);
+					}
+				});				
+								
+				return promise.future();
+				
+			}).onSuccess(reslut ->{				
+				logger.info("code : "+MSMessageReturn.SUCCESS_CODE+", message : "+MSMessageReturn.SUCCESS_MSG);
+				msMessageReturn.commonReturn(routingContext, MSMessageReturn.SUCCESS_CODE, MSMessageReturn.SUCCESS_MSG, MSMessageReturn.STAT_SUCCESS);
+			}).onFailure(result ->{
+				logger.info("code : "+MSMessageReturn.ERR_DELETE_CODE+", message : "+MSMessageReturn.ERR_DELETE_MSG);
+				msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_DELETE_CODE, MSMessageReturn.ERR_DELETE_MSG, MSMessageReturn.STAT_ERROR);
+			});
+			
+			
+		
+		} catch(NullPointerException e) {
+			
+			logger.error("NullPointerException occurred");
+			messageReturn.commonReturn(routingContext, MessageReturn.RC_NULL_POINTER_EXCEPTION_CODE, MessageReturn.RC_NULL_POINTER_EXCEPTION_REASON, isXML);
+	
+		} catch(DecodeException e) {
+			
+			logger.error("DecodeException has occurred");
+			messageReturn.commonReturn(routingContext, MessageReturn.RC_DECODE_EXCEPTION_CODE, MessageReturn.RC_DECODE_EXCEPTION_REASON, isXML);
+	
+			
+		} catch(Exception e) {
+			
+			logger.error("Exception has occurred");
+			messageReturn.commonReturn(routingContext, MessageReturn.RC_EXCEPTION_CODE, MessageReturn.RC_EXCEPTION_REASON, isXML);
+	
+		}  
+	}
+	
+	private void getGeofenceToUpload(RoutingContext routingContext) {
+
+		logger.info("Entered getGeofenceToUpload");
+		JSONParser parser = new JSONParser();
+		
+		try {
+			//JsonObject json = routingContext.getBodyAsJson();
+			//json.put(ADDR, "getMissionDetail");
+			
+			String geoId = routingContext.pathParam("geo_id");
+			String compId = routingContext.pathParam("company_id");
+	
+			JSONObject colId = new JSONObject();					
+			colId.put(COL_ID, "2027");
+			colId.put("geo_id", geoId);
+			colId.put("comp_id", compId);
+			
+			System.out.println("getGeofenceToUpload getGeofences : "+colId.toString());
+			
+			//Mission Table Insert
+			Future<JSONObject> fut2 = Future.future(promise -> eb.request("vertx.selectQuery", colId.toString(), reply -> {
+				
+				if(reply.succeeded()) {	
+					
+					try {
+						System.out.println("getGeofences reply result : "+reply.result().body().toString());
+						JSONArray result = (JSONArray) parser.parse(reply.result().body().toString());
+						JSONObject res =(JSONObject) result.get(0);
+						String code = "";
+						
+						//쿼리 오류 확인
+						if(res.get("code")!=null) {
+							code= res.get("code").toString();
+						}
+						
+						System.out.println("getGeofences result : "+result.toString());
+						System.out.println("getGeofences res : "+res.toString());
+						
+						//JSONObject mission =(JSONObject) reply.result().body();
+						//System.out.println("mission : "+mission.toString());
+						
+						//쿼리 오류 발생 시
+						if( !"".equals(code) &&  !"10002".equals(code)) {
+							logger.info("code : "+MSMessageReturn.ERR_RETRIEVE_DATA_CODE+", message : "+MSMessageReturn.ERR_RETRIEVE_DATA_MSG);
+							msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_RETRIEVE_DATA_CODE, MSMessageReturn.ERR_RETRIEVE_DATA_MSG, MSMessageReturn.STAT_ERROR);
+						}else if( !"".equals(code) && "10001".equals(code)){									
+							logger.info("code : "+MSMessageReturn.ERR_RETRIEVE_DATA_CODE+", message : "+MSMessageReturn.ERR_RETRIEVE_DATA_MSG);
+							msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_RETRIEVE_DATA_CODE, MSMessageReturn.ERR_RETRIEVE_DATA_MSG+"Not found mission : "+geoId, MSMessageReturn.STAT_ERROR);
+						}else {
+							
+							promise.complete(res);
+							
+						}
+						
+					} catch (ParseException e) {
+						promise.fail("fail!");
+						logger.error("failed parsing json insertMission");
+						messageReturn.commonReturn(routingContext, MessageReturn.RC_VERTICLE_FAIL_CODE, MessageReturn.RC_VERTICLE_FAIL_REASON, isXML);
+					}
+					
+					
+				}else {
+					logger.error("failed executing inside vertx.selectQuery");							
+					messageReturn.commonReturn(routingContext, MessageReturn.RC_VERTICLE_FAIL_CODE, MessageReturn.RC_VERTICLE_FAIL_REASON, isXML);					
+				}
+			}));
+			
+			
+			fut2.compose(geofence -> {
+				Promise<List<Object>> promise = Promise.promise();
+				
+				colId.put(COL_ID, "2020");
+				
+				eb.request("vertx.selectQuery", colId.toString(), reply -> {
+					
+					if(reply.succeeded()) {	
+						
+						try {
+							JSONArray result = (JSONArray) parser.parse(reply.result().body().toString());
+							JSONObject res =(JSONObject) result.get(0);
+							String code = "";
+							
+							//쿼리 오류 확인
+							if(res.get("code")!=null) {
+								code= res.get("code").toString();
+							}
+							
+							System.out.println("getGeoPoints result : "+result.toString());
+							System.out.println("getGeoPoints res : "+res.toString());
+							
+							//JSONObject mission =(JSONObject) reply.result().body();
+							//System.out.println("mission : "+mission.toString());
+							
+							//쿼리 오류 발생 시
+							if( !"".equals(code) &&  !"10002".equals(code)) {
+								logger.info("code : "+MSMessageReturn.ERR_RETRIEVE_DATA_CODE+", message : "+MSMessageReturn.ERR_RETRIEVE_DATA_MSG);
+								msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_RETRIEVE_DATA_CODE, MSMessageReturn.ERR_RETRIEVE_DATA_MSG, MSMessageReturn.STAT_ERROR);
+							}else if( !"".equals(code) && "10001".equals(code)){									
+								logger.info("code : "+MSMessageReturn.ERR_RETRIEVE_DATA_CODE+", message : "+MSMessageReturn.ERR_RETRIEVE_DATA_MSG);
+								msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_RETRIEVE_DATA_CODE, MSMessageReturn.ERR_RETRIEVE_DATA_MSG+"Not found getGeoPoints : "+geoId, MSMessageReturn.STAT_ERROR);
+							}else {
+								
+								List<Object> lst = new ArrayList<Object>();
+								lst.add(geofence);
+								lst.add(result);
+								
+								promise.complete(lst);
+								
+							}
+							
+						} catch (ParseException e) {
+							promise.fail("fail!");
+							logger.error("failed parsing json insertMission");
+							messageReturn.commonReturn(routingContext, MessageReturn.RC_VERTICLE_FAIL_CODE, MessageReturn.RC_VERTICLE_FAIL_REASON, isXML);
+						}
+						
+						
+					}else {
+						logger.error("failed executing inside vertx.selectQuery");							
+						messageReturn.commonReturn(routingContext, MessageReturn.RC_VERTICLE_FAIL_CODE, MessageReturn.RC_VERTICLE_FAIL_REASON, isXML);					
+					}
+				});
+				
+				
+				return promise.future();
+				
+			}).onSuccess(objList->{
+				
+				JSONObject res = (JSONObject) objList.get(0);
+				JSONArray geoPointArr = (JSONArray) objList.get(1);				
+				
+				System.out.println("geofence res :"+res.toJSONString());
+				System.out.println("geoPointArr res :"+geoPointArr.toJSONString());
+				
+				List<Map<String, Object>> commands = new ArrayList<Map<String, Object>>();
+				List<Map<String, Object>> lst = new ArrayList<Map<String, Object>>();
+				
+				Map<String, Object> map;
+				
+				for(int i=0; i<geoPointArr.size(); i++) {
+					map = new LinkedHashMap<>();
+					
+					JSONObject point = (JSONObject) geoPointArr.get(i);
+					String order = point.get("GEO_ORDER").toString();
+					String lat = point.get("GEO_LAT").toString();
+					String lng = point.get("GEO_LON").toString();
+					
+					map.put("idx", order);
+					map.put("lat", lat);
+					map.put("lng", lng);
+										
+					commands.add(map);
+				}
+				
+				
+				
+				for(int i=0; i<commands.size(); i++) {
+					
+					Map<String, Object> cmdMap = commands.get(i);
+					
+					String lat = (String) cmdMap.get("lat");
+					String lng = (String) cmdMap.get("lng");
+					String idx = (String) cmdMap.get("idx");
+					
+					map = new LinkedHashMap<>();
+					
+					map.put("target_system", new Integer("1"));
+					map.put("target_component", new Integer("1"));
+					map.put("lat", new Double(lat));
+					map.put("lng", new Double(lng));
+					map.put("idx", new Integer(idx));
+					map.put("count", new Integer(geoPointArr.size()));
+					
+					lst.add(map);
+					
+				}
+				
+				//조회 필드 순서 때문에 재입력함(JsonObject 형식은 순서X)
+				Map<String, Object> result = new LinkedHashMap<>();
+				
+				result.put("geo_type", res.get("GEO_TYPE"));
+				result.put("geo_action", res.get("GEO_ACTION"));
+				result.put("max_alt", res.get("MAX_ALT"));				
+				result.put("commands", lst);				
+				
+				System.out.println("result res : "+result.toString());
+				
+				Gson gson = new Gson();
+				
+				System.out.println("result res2 : "+gson.toJson(result).toString());
+				
+				routingContext.response().putHeader("content-type", "application/json; charset=utf-8")
+				.end(gson.toJson(result).replace("\\", ""));
+				
+			}).onFailure(objList->{
+				logger.info("code : "+MSMessageReturn.ERR_CREATE_CODE+", message : "+MSMessageReturn.ERR_CREATE_MSG);
+				msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_CREATE_CODE, MSMessageReturn.ERR_CREATE_MSG, MSMessageReturn.STAT_ERROR);
+			});
+			
+		} catch(NullPointerException e) {
+			
+			logger.error("NullPointerException occurred");
+			messageReturn.commonReturn(routingContext, MessageReturn.RC_NULL_POINTER_EXCEPTION_CODE, MessageReturn.RC_NULL_POINTER_EXCEPTION_REASON, isXML);
+	
+		} catch(DecodeException e) {
+			
+			logger.error("DecodeException has occurred");
+			messageReturn.commonReturn(routingContext, MessageReturn.RC_DECODE_EXCEPTION_CODE, MessageReturn.RC_DECODE_EXCEPTION_REASON, isXML);
+	
+			
+		} catch(Exception e) {
+			
+			logger.error("Exception has occurred");
+			messageReturn.commonReturn(routingContext, MessageReturn.RC_EXCEPTION_CODE, MessageReturn.RC_EXCEPTION_REASON, isXML);
+	
+		}  
+
+	}
 
 	private boolean checkSql(String beforeValidation) {
 		
@@ -4191,6 +5597,65 @@ public class MSRoute extends AbstractVerticle {
 		
 	}
 	
+	private boolean checkGEOParam(String beforeValidation, RoutingContext routingContext, List<JSONObject> cmdList) {
+		
+		logger.info("Entered checkGEOParam");
+		
+		JSONParser parser = new JSONParser();
+		JSONObject jsonObject = new JSONObject();
+		
+		try {
+			
+			jsonObject = (JSONObject) parser.parse(beforeValidation);
+		
+			for (Object key : jsonObject.keySet()) {
+				
+				Object obj = jsonObject.get(key);
+				String jsonStr = obj.toString();
+				
+				if("commands".equals(key)) {				
+					if(!(obj instanceof JSONArray)){	
+						logger.error(key+" parameter type error");
+						msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_INTERNAL_ERROR_CODE, MSMessageReturn.ERR_INTERNAL_ERROR_MSG+MSMessageReturn.ERR_WRONG_PARAM_CODE, MSMessageReturn.STAT_ERROR);
+						return false;
+					}
+					
+					JSONArray jsonArr = (JSONArray) obj; 
+					
+					System.out.println("jsonArr : "+jsonArr.toJSONString());
+					
+					for (int i = 0; i < jsonArr.size(); i++) {
+						
+						JSONObject param = (JSONObject) jsonArr.get(i);
+												
+						cmdList.add(param);
+						
+					}
+					System.out.println("cmdList : "+cmdList.toString());
+					
+				}
+				
+				if(jsonStr.length() <= 0 ) {
+					logger.error("code : "+MSMessageReturn.ERR_WRONG_PARAM_CODE+", message : "+MSMessageReturn.ERR_WRONG_PARAM_MSG);
+					msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_WRONG_PARAM_CODE, MSMessageReturn.ERR_WRONG_PARAM_MSG, MSMessageReturn.STAT_ERROR);
+					return false;
+				}
+				
+			}
+		
+		} catch (ParseException e) {
+			
+			System.out.println(e);
+			logger.error("code : "+MSMessageReturn.ERR_JSON_PARSE_CODE+", message : "+MSMessageReturn.ERR_JSON_PARSE_MSG);
+			msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_JSON_PARSE_CODE, MSMessageReturn.ERR_JSON_PARSE_MSG, MSMessageReturn.STAT_ERROR);
+			return false;
+			
+		}
+		
+		return true;
+		
+	}
+	
 	private Future<String> chkMissionId(Promise<String> promise, RoutingContext routingContext){
 		Promise<String> promise2 = Promise.promise();
 		String uuid = UUID.randomUUID().toString();
@@ -4236,6 +5701,56 @@ public class MSRoute extends AbstractVerticle {
 				System.out.println("fail~~~~ : ");
 				Future<String> fut2 = this.chkMissionId(promise, routingContext);
 				this.reChkMissionId(fut2, promise, routingContext);
+			}
+			return promise2.future();
+		});
+	}
+	
+	private Future<String> chkGeofenceId(Promise<String> promise, RoutingContext routingContext){
+		Promise<String> promise2 = Promise.promise();
+		String uuid = UUID.randomUUID().toString();
+		//String mission_id = "ms_00"+test;
+		String geo_id = "G"+uuid.substring(10,23);
+		
+		JSONObject queryId = new JSONObject();
+		queryId.put(COL_ID, "2020");
+		queryId.put("geo_id", geo_id);
+		
+		eb.request("vertx.selectQuery", queryId.toString(), reply -> {
+			
+			if(reply.succeeded()) {
+				
+				String res = reply.result().body().toString();
+				
+				System.out.println("getGeofences : "+res);
+				
+				if("[{\"code\":\"10001\",\"reason\":\"쿼리를 통해 조회된 결과가 없습니다\"}]".equals(res)) {
+					promise.complete(geo_id);
+				}else {
+					test++;					
+					promise2.complete("fail");
+				}
+				
+			}else {
+				logger.error("failed executing inside vertx.selectQuery");				
+				messageReturn.commonReturn(routingContext, MessageReturn.RC_VERTICLE_FAIL_CODE, MessageReturn.RC_VERTICLE_FAIL_REASON, isXML);
+			}
+		});
+		return promise2.future();
+	}
+	
+	private void reChkGeofenceId(Future<String> fut, Promise<String> promise, RoutingContext routingContext) {
+		
+		fut.compose(result -> {
+			Promise<String> promise2 = Promise.promise();
+			System.out.println(test+" result : "+result);
+			if(!"fail".equals(result)) {							
+				System.out.println("test : "+test);
+				promise.complete(result);
+			}else {
+				System.out.println("fail~~~~ : ");
+				Future<String> fut2 = this.chkGeofenceId(promise, routingContext);
+				this.reChkGeofenceId(fut2, promise, routingContext);
 			}
 			return promise2.future();
 		});
@@ -4494,7 +6009,7 @@ public class MSRoute extends AbstractVerticle {
 							
 							if(!cmdMap.containsKey(attrName)) {
 								
-								String msg = "No Mandatory Attribute ATTR_NAME : "+attrName;
+								String msg = "No Mandatory Attribute ATTR NAME : "+attrName;
 								// 전문 내 해당 UI 속성 중 Mandatory 항목이 없는 경우
 								logger.error(msg);
 								msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_MDT_PARAM_MISS_CODE, MSMessageReturn.ERR_MDT_PARAM_MISS_MSG+msg, MSMessageReturn.STAT_ERROR);
@@ -4506,7 +6021,7 @@ public class MSRoute extends AbstractVerticle {
 								
 								if("".equals(val) || val == null) {
 									
-									String msg = "No Mandatory Attribute value ATTR_NAME : "+attrName;
+									String msg = "No Mandatory Attribute value ATTR NAME : "+attrName;
 									
 									logger.error(msg);
 									//promise.fail(msg);

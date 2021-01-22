@@ -63,11 +63,11 @@ public class QueryManage extends AbstractVerticle {
 	private static String QUERY_STRING = null;
 	private static String ROLE = null;
 			
-	private static final String COL_ID = "queryId";
-	private static final String COL_QSTR = "queryString";
-	private static final String COL_DESC = "descript";
-	private static final String COL_SQLT = "sqlType";
-	private static final String COL_ROLE = "role";
+	private static String COL_ID = "queryId";
+	private static String COL_QSTR = "queryString";
+	private static String COL_DESC = "descript";
+	private static String COL_SQLT = "sqlType";
+	private static String COL_ROLE = "role";
 	private static final String ADDR = "address";
 	
 	private QueryMessage messageReturn;
@@ -89,8 +89,16 @@ public class QueryManage extends AbstractVerticle {
 		
 		logger.info("started QueryManage");
 
-		//System.out.println(Thread.currentThread().getId()+" [QueryManage] started");		
-
+		//System.out.println(Thread.currentThread().getId()+" [QueryManage] started");
+		
+		if("oracle".equals(config().getString("db"))) {
+			COL_ID = "QUERYID";
+			COL_QSTR = "QUERYSTRING";
+			COL_DESC = "DESCRIPT";
+			COL_SQLT = "SQLTYPE";
+			COL_ROLE = "ROLE";
+		}
+		
 		// Create a JDBC client
 		jdbc = JDBCClient.createShared(vertx, config(), "Query_Manage");
 

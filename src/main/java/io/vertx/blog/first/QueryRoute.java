@@ -87,11 +87,11 @@ public class QueryRoute extends AbstractVerticle {
 	private static final String CLASSPATH_FILE = "router.properties";
 	private static final String CLASSPATH_FILE_MESSAGE = "message.properties";
 	
-	private static final String COL_ID = "queryId";
-	private static final String COL_QSTR = "queryString";
-	private static final String COL_DESC = "descript";
-	private static final String COL_SQLT = "sqlType";
-	private static final String COL_ROLE = "role";
+	private static String COL_ID = "queryId";
+	private static String COL_QSTR = "queryString";
+	private static String COL_DESC = "descript";
+	private static String COL_SQLT = "sqlType";
+	private static String COL_ROLE = "role";
 	private static final String ADDR = "address";
 	
 	private static final String S_ID = "service_id";
@@ -157,6 +157,14 @@ public class QueryRoute extends AbstractVerticle {
 
 		// This body handler will be called for all routes
 		router.route().handler(BodyHandler.create());
+		
+		if("oracle".equals(config().getString("db"))) {
+			COL_ID = "QUERYID";
+			COL_QSTR = "QUERYSTRING";
+			COL_DESC = "DESCRIPT";
+			COL_SQLT = "SQLTYPE";
+			COL_ROLE = "ROLE";
+		}
 
 		// Bind "/" to our hello message.
 		String home = configuration.getString("router.home");

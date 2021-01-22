@@ -38,7 +38,7 @@
 				<member-list>
 					<!-- <member>192.168.123.70</member> -->					
 					<member>192.168.11.2</member>
-					<member>192.168.11.6</member>
+					<!-- <member>192.168.11.6</member> -->
 					<!-- <required-member>192.168.199.128</required-member> -->
 				</member-list>
 			</tcp-ip>

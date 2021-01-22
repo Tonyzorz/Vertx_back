@@ -59,6 +59,7 @@ public class PreStarterVerticle extends AbstractVerticle {
 			SQLConnection connection = ar.result();
 			
 			System.out.println("role : "+config().getString("role"));
+			System.out.println("db : "+config().getString("db"));
 			
 			connection.query("SELECT * FROM INSTANCE WHERE ROLE= 'adm'", results -> {					
 				
@@ -67,16 +68,28 @@ public class PreStarterVerticle extends AbstractVerticle {
 					
 					List<JsonObject> listQueryJson = results.result().getRows();					
 
+					System.out.println("listQueryJson : "+listQueryJson.toString());
 					
 					for (int i = 0; i < listQueryJson.size(); i++) {
 						
-						//System.out.println("listQueryJson.get("+i+") : "+listQueryJson.get(i).toString());
+						System.out.println("listQueryJson.get("+i+") : "+listQueryJson.get(i).toString());
 						
 						JsonObject queryJsons = listQueryJson.get(i);
 						
-						String worker_yn = queryJsons.getString("worker_yn");
-						String instance_nm = queryJsons.getString("instance_nm");					
-						Integer instance_cnt = queryJsons.getInteger("instance_cnt");
+						String worker_yn = "";
+						String instance_nm = "";
+						Integer instance_cnt = 0;
+						
+						if("oracle".equals(config().getString("db"))) {
+							worker_yn = queryJsons.getString("WORKER_YN");
+							instance_nm = queryJsons.getString("INSTANCE_NM");					
+							instance_cnt = queryJsons.getInteger("INSTANCE_CNT");
+						}else {
+							worker_yn = queryJsons.getString("worker_yn");
+							instance_nm = queryJsons.getString("instance_nm");					
+							instance_cnt = queryJsons.getInteger("instance_cnt");
+						}
+						
 						
 						if ( worker_yn == null ||  "".equals(worker_yn)
 								|| instance_nm == null || "".equals(instance_nm)
@@ -94,6 +107,10 @@ public class PreStarterVerticle extends AbstractVerticle {
 						}
 						
 					}
+					
+				}else {
+					
+					System.out.println("result : "+results.toString());					
 					
 				}
 				

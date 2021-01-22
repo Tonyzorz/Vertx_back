@@ -52,8 +52,8 @@ public class QueryVerticle extends AbstractVerticle {
 	
 	private QueryMessage messageReturn;
 	
-	private static final String COL_ID = "queryId";
-	private static final String ASYNCMAP_NAME = "mysql";
+	private static String COL_ID = "queryId";
+	private static String ASYNCMAP_NAME = "mysql";
 	/**
 	 * This method is called when the verticle is deployed. It creates a HTTP server
 	 * and registers a simple request handler.
@@ -70,7 +70,12 @@ public class QueryVerticle extends AbstractVerticle {
 	public void start(Future<Void> fut) throws ConfigurationException {
 		logger.info("started QueryVerticle");
 
-		//System.out.println(Thread.currentThread().getId()+" [QueryVerticle] started");		
+		//System.out.println(Thread.currentThread().getId()+" [QueryVerticle] started");
+		
+		if("oracle".equals(config().getString("db"))) {
+			COL_ID = "QUERYID";
+			ASYNCMAP_NAME = "oracle";
+		}
 
 		// Create a JDBC client
 		jdbc = JDBCClient.createShared(vertx, config(), "My-Whisky-Collection");
@@ -192,7 +197,7 @@ public class QueryVerticle extends AbstractVerticle {
 	 */
 	private String queryConverter(JSONObject messageJson, String queryString) {
 
-		queryString = queryString.toLowerCase();
+		//queryString = queryString.toLowerCase();
 
 		for (Object key : messageJson.keySet()) {
 
