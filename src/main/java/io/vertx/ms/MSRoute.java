@@ -107,6 +107,7 @@ public class MSRoute extends AbstractVerticle {
 	private static String COL_DESC = "descript";
 	private static String COL_SQLT = "sqlType";
 	private static final String ADDR = "address";
+	private static String DB_TYPE = "2"; //mysql
 	
 	private RouterMessage messageReturn;
 	private MSRouterMessage msMessageReturn;
@@ -121,6 +122,7 @@ public class MSRoute extends AbstractVerticle {
 			COL_QSTR = "QUERYSTRING";
 			COL_DESC = "DESCRIPT";
 			COL_SQLT = "SQLTYPE";
+			DB_TYPE = "3"; //oracle
 		}
 
 		eb = vertx.eventBus();
@@ -294,12 +296,17 @@ public class MSRoute extends AbstractVerticle {
 			
 			boolean isValid = this.checkMSParam(json.toString(), routingContext, cmdList);
 			
+			if(pararmCnt == null) {
+				logger.info("code : "+MSMessageReturn.ERR_CREATE_CODE+", message : "+MSMessageReturn.ERR_CREATE_MSG);
+				msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_CREATE_CODE, MSMessageReturn.ERR_CREATE_MSG, MSMessageReturn.STAT_ERROR);
+			}
+			
 			System.out.println("isValid : "+isValid);
 			
 			if(isValid) {
 				
 				JSONObject queryId = new JSONObject();
-				queryId.put(COL_ID, "2002");
+				queryId.put(COL_ID, DB_TYPE+"002");
 				
 				Future<String> fut1 = this.itemValidator(routingContext, queryId, parser, cmdList);
 				
@@ -427,7 +434,7 @@ public class MSRoute extends AbstractVerticle {
 				}).compose(missionId ->{
 					Promise<String> promise = Promise.promise();
 					JSONObject insQueryId = MISSION.get(0);//new JSONObject();
-					insQueryId.put(COL_ID, "2004");
+					insQueryId.put(COL_ID, DB_TYPE+"004");
 					System.out.println("insertMission : "+insQueryId.toString());
 					
 					//Mission Table Insert
@@ -472,7 +479,7 @@ public class MSRoute extends AbstractVerticle {
 					//CommandList Table insert
 					for(int i=0; i<COMMAND.size(); i++) {
 						JSONObject insQueryId = COMMAND.get(i);//new JSONObject();
-						insQueryId.put(COL_ID, "2005");
+						insQueryId.put(COL_ID, DB_TYPE+"005");
 						insQueryId.put("mission_sub_id", "");						
 						
 						//System.out.println("insertCommandList : "+insQueryId.toString());
@@ -504,7 +511,7 @@ public class MSRoute extends AbstractVerticle {
 					//AttributeList Table insert
 					for(int i=0; i<ATTRIBUTE.size(); i++) {
 						JSONObject insQueryId = ATTRIBUTE.get(i);//new JSONObject();
-						insQueryId.put(COL_ID, "2006");
+						insQueryId.put(COL_ID, DB_TYPE+"006");
 						
 						//System.out.println("insertAttributeList : "+insQueryId.toString());
 						
@@ -530,7 +537,7 @@ public class MSRoute extends AbstractVerticle {
 				}).onSuccess(missionId->{
 					
 					JSONObject colId = new JSONObject();					
-					colId.put(COL_ID, "2010");
+					colId.put(COL_ID, DB_TYPE+"010");
 					colId.put("mission_id", missionId);					
 					
 					if(MISSION.get(0).get("comp_id") != null) {
@@ -591,7 +598,7 @@ public class MSRoute extends AbstractVerticle {
 					fut2.compose(mission -> {
 						Promise<List<Object>> promise = Promise.promise();
 						
-						colId.put(COL_ID, "2011");
+						colId.put(COL_ID, DB_TYPE+"011");
 						
 						eb.request("vertx.selectQuery", colId.toString(), reply -> {
 							
@@ -649,7 +656,7 @@ public class MSRoute extends AbstractVerticle {
 					}).compose(objLst -> {
 						Promise<List<Object>> promise = Promise.promise();
 						
-						colId.put(COL_ID, "2012");
+						colId.put(COL_ID, DB_TYPE+"012");
 						
 						eb.request("vertx.selectQuery", colId.toString(), reply -> {
 							
@@ -749,9 +756,12 @@ public class MSRoute extends AbstractVerticle {
 						result.put("repeat", res.get("REPEAT"));
 						result.put("is_grid", res.get("IS_GRID"));
 						result.put("service_type", res.get("SERVICE_TYPE"));
-						String gridString = res.get("GRID_DETAILS").toString();
-						Map<String,String> grid_details = (Map<String,String>) new Gson().fromJson(gridString, Map.class);	
-						result.put("grid_details",grid_details);
+						String gridString = "";
+						if(res.get("GRID_DETAILS") != null && "".equals(res.get("GRID_DETAILS").toString())) {
+							gridString = res.get("GRID_DETAILS").toString();
+							Map<String,String> grid_details = (Map<String,String>) new Gson().fromJson(gridString, Map.class);	
+							result.put("grid_details",grid_details);
+						}
 						result.put("total_time", res.get("TOTAL_TIME"));
 						result.put("total_distance", res.get("TOTAL_DISTANCE"));
 						result.put("count", commandArr.size()+"");//int -> string 변환
@@ -820,7 +830,7 @@ public class MSRoute extends AbstractVerticle {
 			String compId = routingContext.pathParam("company_id");
 	
 			JSONObject colId = new JSONObject();					
-			colId.put(COL_ID, "2010");
+			colId.put(COL_ID, DB_TYPE+"010");
 			colId.put("mission_id", missionId);
 			colId.put("comp_id", compId);
 			
@@ -878,7 +888,7 @@ public class MSRoute extends AbstractVerticle {
 			fut2.compose(mission -> {
 				Promise<List<Object>> promise = Promise.promise();
 				
-				colId.put(COL_ID, "2011");
+				colId.put(COL_ID, DB_TYPE+"011");
 				
 				eb.request("vertx.selectQuery", colId.toString(), reply -> {
 					
@@ -936,7 +946,7 @@ public class MSRoute extends AbstractVerticle {
 			}).compose(objLst -> {
 				Promise<List<Object>> promise = Promise.promise();
 				
-				colId.put(COL_ID, "2012");
+				colId.put(COL_ID, DB_TYPE+"012");
 				
 				eb.request("vertx.selectQuery", colId.toString(), reply -> {
 					
@@ -1036,9 +1046,12 @@ public class MSRoute extends AbstractVerticle {
 				result.put("repeat", res.get("REPEAT"));
 				result.put("is_grid", res.get("IS_GRID"));
 				result.put("service_type", res.get("SERVICE_TYPE"));
-				String gridString = res.get("GRID_DETAILS").toString();
-				Map<String,String> grid_details = (Map<String,String>) new Gson().fromJson(gridString, Map.class);	
-				result.put("grid_details",grid_details);
+				String gridString = "";
+				if(res.get("GRID_DETAILS") != null && "".equals(res.get("GRID_DETAILS").toString())) {
+					gridString = res.get("GRID_DETAILS").toString();
+					Map<String,String> grid_details = (Map<String,String>) new Gson().fromJson(gridString, Map.class);	
+					result.put("grid_details",grid_details);
+				}
 				result.put("total_time", res.get("TOTAL_TIME"));
 				result.put("total_distance", res.get("TOTAL_DISTANCE"));
 				result.put("count", commandArr.size()+"");//int -> string 변환
@@ -1102,10 +1115,10 @@ public class MSRoute extends AbstractVerticle {
 			String mission_id = json.getString("mission_id");
 			String company_id = json.getString("comp_id");
 			
-			/*if( "".equals(mission_id) || mission_id == null) {
+			if( "".equals(mission_id) || mission_id == null) {
 				logger.error("code : "+MSMessageReturn.ERR_MDT_PARAM_MISS_CODE+", message : "+MSMessageReturn.ERR_MDT_PARAM_MISS_MSG+"mission_id");
 				msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_MDT_PARAM_MISS_CODE, MSMessageReturn.ERR_MDT_PARAM_MISS_MSG+"mission_id", MSMessageReturn.STAT_ERROR);
-			}*/
+			}
 			
 			boolean isValid = this.checkMSParam(json.toString(), routingContext, cmdList);
 			
@@ -1116,7 +1129,7 @@ public class MSRoute extends AbstractVerticle {
 			if(isValid) {
 				
 				JSONObject queryId = new JSONObject();
-				queryId.put(COL_ID, "2002");
+				queryId.put(COL_ID, DB_TYPE+"002");
 				
 				Future<String> fut1 = this.itemValidator(routingContext, queryId, parser, cmdList);
 
@@ -1232,7 +1245,7 @@ public class MSRoute extends AbstractVerticle {
 					Promise<String> promise = Promise.promise();
 					
 					JSONObject queryParam2 = new JSONObject();
-					queryParam2.put(COL_ID, "2010");
+					queryParam2.put(COL_ID, DB_TYPE+"010");
 					queryParam2.put("mission_id", mission_id);
 					queryParam2.put("comp_id", company_id);
 					
@@ -1265,8 +1278,8 @@ public class MSRoute extends AbstractVerticle {
 								}
 								//쿼리 결과만 리턴 되고 그 결과가 정상(10002)이 아닐 때
 								else if( !"10002".equals(queryResCd) ) {
-									logger.error("code : "+MSMessageReturn.ERR_DELETE_CODE+", message : "+MSMessageReturn.ERR_DELETE_MSG);
-									msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_DELETE_CODE, MSMessageReturn.ERR_DELETE_MSG, MSMessageReturn.STAT_ERROR);
+									logger.error("code : "+MSMessageReturn.ERR_UPDATE_CODE+", message : "+MSMessageReturn.ERR_UPDATE_MSG);
+									msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_UPDATE_CODE, MSMessageReturn.ERR_UPDATE_MSG, MSMessageReturn.STAT_ERROR);
 									promise.fail(mission_id);
 								}
 								
@@ -1289,7 +1302,7 @@ public class MSRoute extends AbstractVerticle {
 					Promise<String> promise = Promise.promise();
 					
 					JSONObject queryParam2 = new JSONObject();
-					queryParam2.put(COL_ID, "2007");
+					queryParam2.put(COL_ID, DB_TYPE+"007");
 					queryParam2.put("mission_id", result);
 					
 					System.out.println("DeleteAttributes param : "+queryParam2.toString());
@@ -1320,8 +1333,8 @@ public class MSRoute extends AbstractVerticle {
 									logger.info("DeleteAttributes Success : "+result);								
 									promise.complete(mission_id);
 								}else {
-									logger.error("code : "+MSMessageReturn.ERR_DELETE_CODE+", message : "+MSMessageReturn.ERR_DELETE_MSG);
-									msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_DELETE_CODE, MSMessageReturn.ERR_DELETE_MSG, MSMessageReturn.STAT_ERROR);
+									logger.error("code : "+MSMessageReturn.ERR_UPDATE_CODE+", message : "+MSMessageReturn.ERR_UPDATE_MSG);
+									msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_UPDATE_CODE, MSMessageReturn.ERR_UPDATE_MSG, MSMessageReturn.STAT_ERROR);
 									promise.fail(mission_id);
 								}
 								
@@ -1335,8 +1348,8 @@ public class MSRoute extends AbstractVerticle {
 							
 						} else {
 			
-							logger.error("code : "+MSMessageReturn.ERR_DELETE_CODE+", message : "+MSMessageReturn.ERR_DELETE_MSG);
-							msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_DELETE_CODE, MSMessageReturn.ERR_DELETE_MSG, MSMessageReturn.STAT_ERROR);
+							logger.error("code : "+MSMessageReturn.ERR_UPDATE_CODE+", message : "+MSMessageReturn.ERR_UPDATE_MSG);
+							msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_UPDATE_CODE, MSMessageReturn.ERR_UPDATE_MSG, MSMessageReturn.STAT_ERROR);
 							promise.fail(result);
 						}
 					});				
@@ -1347,7 +1360,7 @@ public class MSRoute extends AbstractVerticle {
 					Promise<String> promise = Promise.promise();
 					
 					JSONObject queryParam2 = new JSONObject();
-					queryParam2.put(COL_ID, "2008");
+					queryParam2.put(COL_ID, DB_TYPE+"008");
 					queryParam2.put("mission_id", result);
 					
 					System.out.println("DeleteCommands param : "+queryParam2.toString());
@@ -1378,8 +1391,8 @@ public class MSRoute extends AbstractVerticle {
 									logger.info("DeleteCommands Success : "+result);								
 									promise.complete(mission_id);
 								}else {
-									logger.error("code : "+MSMessageReturn.ERR_DELETE_CODE+", message : "+MSMessageReturn.ERR_DELETE_MSG);
-									msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_DELETE_CODE, MSMessageReturn.ERR_DELETE_MSG, MSMessageReturn.STAT_ERROR);
+									logger.error("code : "+MSMessageReturn.ERR_UPDATE_CODE+", message : "+MSMessageReturn.ERR_UPDATE_MSG);
+									msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_UPDATE_CODE, MSMessageReturn.ERR_UPDATE_MSG, MSMessageReturn.STAT_ERROR);
 									promise.fail(mission_id);
 								}
 								
@@ -1393,8 +1406,8 @@ public class MSRoute extends AbstractVerticle {
 							
 						} else {
 			
-							logger.error("code : "+MSMessageReturn.ERR_DELETE_CODE+", message : "+MSMessageReturn.ERR_DELETE_MSG);
-							msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_DELETE_CODE, MSMessageReturn.ERR_DELETE_MSG, MSMessageReturn.STAT_ERROR);
+							logger.error("code : "+MSMessageReturn.ERR_UPDATE_CODE+", message : "+MSMessageReturn.ERR_UPDATE_MSG);
+							msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_UPDATE_CODE, MSMessageReturn.ERR_UPDATE_MSG, MSMessageReturn.STAT_ERROR);
 							promise.fail(result);
 						}
 					});
@@ -1405,7 +1418,7 @@ public class MSRoute extends AbstractVerticle {
 					Promise<String> promise = Promise.promise();
 					
 					JSONObject queryParam2 = new JSONObject();
-					queryParam2.put(COL_ID, "2009");
+					queryParam2.put(COL_ID, DB_TYPE+"009");
 					queryParam2.put("mission_id", result);
 					
 					System.out.println("DeleteMission param : "+queryParam2.toString());
@@ -1436,8 +1449,8 @@ public class MSRoute extends AbstractVerticle {
 									logger.info("DeleteMission Success : "+result);								
 									promise.complete(mission_id);
 								}else {
-									logger.error("code : "+MSMessageReturn.ERR_DELETE_CODE+", message : "+MSMessageReturn.ERR_DELETE_MSG);
-									msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_DELETE_CODE, MSMessageReturn.ERR_DELETE_MSG, MSMessageReturn.STAT_ERROR);
+									logger.error("code : "+MSMessageReturn.ERR_UPDATE_CODE+", message : "+MSMessageReturn.ERR_UPDATE_MSG);
+									msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_UPDATE_CODE, MSMessageReturn.ERR_UPDATE_MSG, MSMessageReturn.STAT_ERROR);
 									promise.fail(mission_id);
 								}
 								
@@ -1451,8 +1464,8 @@ public class MSRoute extends AbstractVerticle {
 							
 						} else {
 			
-							logger.error("code : "+MSMessageReturn.ERR_DELETE_CODE+", message : "+MSMessageReturn.ERR_DELETE_MSG);
-							msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_DELETE_CODE, MSMessageReturn.ERR_DELETE_MSG, MSMessageReturn.STAT_ERROR) ;
+							logger.error("code : "+MSMessageReturn.ERR_UPDATE_CODE+", message : "+MSMessageReturn.ERR_UPDATE_MSG);
+							msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_UPDATE_CODE, MSMessageReturn.ERR_UPDATE_MSG, MSMessageReturn.STAT_ERROR) ;
 							promise.fail(result);
 						}
 					});				
@@ -1462,7 +1475,7 @@ public class MSRoute extends AbstractVerticle {
 				}).compose(missionId ->{
 					Promise<String> promise = Promise.promise();
 					JSONObject insQueryId = MISSION.get(0);//new JSONObject();
-					insQueryId.put(COL_ID, "2004");
+					insQueryId.put(COL_ID, DB_TYPE+"004");
 					System.out.println("insertMission  : "+insQueryId.toString());
 					
 					//Mission Table Insert
@@ -1507,7 +1520,7 @@ public class MSRoute extends AbstractVerticle {
 					//CommandList Table insert
 					for(int i=0; i<COMMAND.size(); i++) {
 						JSONObject insQueryId = COMMAND.get(i);//new JSONObject();
-						insQueryId.put(COL_ID, "2005");
+						insQueryId.put(COL_ID, DB_TYPE+"005");
 						insQueryId.put("mission_sub_id", "");						
 						
 						//System.out.println("insertCommandList : "+insQueryId.toString());
@@ -1539,7 +1552,7 @@ public class MSRoute extends AbstractVerticle {
 					//AttributeList Table insert
 					for(int i=0; i<ATTRIBUTE.size(); i++) {
 						JSONObject insQueryId = ATTRIBUTE.get(i);//new JSONObject();
-						insQueryId.put(COL_ID, "2006");
+						insQueryId.put(COL_ID, DB_TYPE+"006");
 						
 						//System.out.println("insertAttributeList : "+insQueryId.toString());
 						
@@ -1565,7 +1578,7 @@ public class MSRoute extends AbstractVerticle {
 				}).onSuccess(missionId->{
 					
 					JSONObject colId = new JSONObject();					
-					colId.put(COL_ID, "2010");
+					colId.put(COL_ID, DB_TYPE+"010");
 					colId.put("mission_id", missionId);					
 					
 					if(MISSION.get(0).get("comp_id") != null) {
@@ -1626,7 +1639,7 @@ public class MSRoute extends AbstractVerticle {
 					fut2.compose(mission -> {
 						Promise<List<Object>> promise = Promise.promise();
 						
-						colId.put(COL_ID, "2011");
+						colId.put(COL_ID, DB_TYPE+"011");
 						
 						eb.request("vertx.selectQuery", colId.toString(), reply -> {
 							
@@ -1684,7 +1697,7 @@ public class MSRoute extends AbstractVerticle {
 					}).compose(objLst -> {
 						Promise<List<Object>> promise = Promise.promise();
 						
-						colId.put(COL_ID, "2012");
+						colId.put(COL_ID, DB_TYPE+"012");
 						
 						eb.request("vertx.selectQuery", colId.toString(), reply -> {
 							
@@ -1784,9 +1797,12 @@ public class MSRoute extends AbstractVerticle {
 						result.put("repeat", res.get("REPEAT"));
 						result.put("is_grid", res.get("IS_GRID"));
 						result.put("service_type", res.get("SERVICE_TYPE"));
-						String gridString = res.get("GRID_DETAILS").toString();
-						Map<String,String> grid_details = (Map<String,String>) new Gson().fromJson(gridString, Map.class);	
-						result.put("grid_details",grid_details);
+						String gridString = "";
+						if(res.get("GRID_DETAILS") != null && "".equals(res.get("GRID_DETAILS").toString())) {
+							gridString = res.get("GRID_DETAILS").toString();
+							Map<String,String> grid_details = (Map<String,String>) new Gson().fromJson(gridString, Map.class);	
+							result.put("grid_details",grid_details);
+						}
 						result.put("total_time", res.get("TOTAL_TIME"));
 						result.put("total_distance", res.get("TOTAL_DISTANCE"));
 						result.put("count", commandArr.size()+"");//int -> string 변환
@@ -1803,13 +1819,13 @@ public class MSRoute extends AbstractVerticle {
 						.end(gson.toJson(result));
 						
 					}).onFailure(objList->{
-						logger.info("code : "+MSMessageReturn.ERR_CREATE_CODE+", message : "+MSMessageReturn.ERR_CREATE_MSG);
-						msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_CREATE_CODE, MSMessageReturn.ERR_CREATE_MSG, MSMessageReturn.STAT_ERROR);
+						logger.info("code : "+MSMessageReturn.ERR_UPDATE_CODE+", message : "+MSMessageReturn.ERR_UPDATE_MSG);
+						msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_UPDATE_CODE, MSMessageReturn.ERR_UPDATE_MSG, MSMessageReturn.STAT_ERROR);
 					});
 					
 				}).onFailure(missionId->{
-					logger.info("code : "+MSMessageReturn.ERR_CREATE_CODE+", message : "+MSMessageReturn.ERR_CREATE_MSG);
-					msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_CREATE_CODE, MSMessageReturn.ERR_CREATE_MSG, MSMessageReturn.STAT_ERROR);
+					logger.info("code : "+MSMessageReturn.ERR_UPDATE_CODE+", message : "+MSMessageReturn.ERR_UPDATE_MSG);
+					msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_UPDATE_CODE, MSMessageReturn.ERR_UPDATE_MSG, MSMessageReturn.STAT_ERROR);
 				});
 
 				
@@ -1864,7 +1880,7 @@ public class MSRoute extends AbstractVerticle {
 			System.out.println("deleteMission param : "+json.toString());
 				
 			JSONObject queryParam = new JSONObject();
-			queryParam.put(COL_ID, "2003");
+			queryParam.put(COL_ID, DB_TYPE+"003");
 			queryParam.put("mission_id", mission_id);
 			
 			Future<String> fut1 = Future.future(promise -> eb.request("vertx.selectQuery", queryParam.toString(), reply -> {
@@ -1919,7 +1935,7 @@ public class MSRoute extends AbstractVerticle {
 				Promise<String> promise = Promise.promise();
 				
 				JSONObject queryParam2 = new JSONObject();
-				queryParam2.put(COL_ID, "2007");
+				queryParam2.put(COL_ID, DB_TYPE+"007");
 				queryParam2.put("mission_id", result);
 				
 				System.out.println("DeleteAttributes param : "+queryParam2.toString());
@@ -1977,7 +1993,7 @@ public class MSRoute extends AbstractVerticle {
 				Promise<String> promise = Promise.promise();
 				
 				JSONObject queryParam2 = new JSONObject();
-				queryParam2.put(COL_ID, "2008");
+				queryParam2.put(COL_ID, DB_TYPE+"008");
 				queryParam2.put("mission_id", result);
 				
 				System.out.println("DeleteCommands param : "+queryParam2.toString());
@@ -2035,7 +2051,7 @@ public class MSRoute extends AbstractVerticle {
 				Promise<String> promise = Promise.promise();
 				
 				JSONObject queryParam2 = new JSONObject();
-				queryParam2.put(COL_ID, "2009");
+				queryParam2.put(COL_ID, DB_TYPE+"009");
 				queryParam2.put("mission_id", result);
 				
 				System.out.println("DeleteMission param : "+queryParam2.toString());
@@ -2133,9 +2149,14 @@ public class MSRoute extends AbstractVerticle {
 			//json.put(ADDR, "getAllMission");
 			
 			JsonObject json = routingContext.getBodyAsJson();
+			
+			if(json.isEmpty() || json.getString("comp_id") == null ) {
+				routingContext.response().putHeader("content-type", "application/json; charset=utf-8")
+				.end("");
+			}
 		
 			logger.info("attempting to connect to vertx.queryManage verticle");
-			json.put(COL_ID, "2000");
+			json.put(COL_ID, DB_TYPE+"000");
 			//json.put("isXML", true);
 			
 			boolean isXML = false;			
@@ -2181,7 +2202,7 @@ public class MSRoute extends AbstractVerticle {
 			
 			fut1.compose(missions -> {
 				
-				json.put(COL_ID, "2001");
+				json.put(COL_ID, DB_TYPE+"001");
 				
 				Promise<Void> promise = Promise.promise();
 				
@@ -2394,9 +2415,14 @@ public class MSRoute extends AbstractVerticle {
 			
 			String missionId = routingContext.pathParam("mission_id");
 			String compId = routingContext.pathParam("company_id");
+			
+			if( "".equals(missionId) || missionId == null) {
+				logger.error("code : "+MSMessageReturn.ERR_MDT_PARAM_MISS_CODE+", message : "+MSMessageReturn.ERR_MDT_PARAM_MISS_MSG+"mission_id");
+				msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_MDT_PARAM_MISS_CODE, MSMessageReturn.ERR_MDT_PARAM_MISS_MSG+"mission_id", MSMessageReturn.STAT_ERROR);
+			}
 	
 			JSONObject colId = new JSONObject();					
-			colId.put(COL_ID, "2010");
+			colId.put(COL_ID, DB_TYPE+"010");
 			colId.put("mission_id", missionId);
 			colId.put("comp_id", compId);
 			
@@ -2454,7 +2480,7 @@ public class MSRoute extends AbstractVerticle {
 			fut2.compose(mission -> {
 				Promise<List<Object>> promise = Promise.promise();
 				
-				colId.put(COL_ID, "2012");
+				colId.put(COL_ID, DB_TYPE+"012");
 				
 				eb.request("vertx.selectQuery", colId.toString(), reply -> {
 					
@@ -2544,7 +2570,7 @@ public class MSRoute extends AbstractVerticle {
 			}).compose(objLst -> {
 				Promise<List<Object>> promise = Promise.promise();
 				
-				colId.put(COL_ID, "2013");
+				colId.put(COL_ID, DB_TYPE+"013");
 				colId.put("CMD_TYPE", "1");
 				
 				eb.request("vertx.selectQuery", colId.toString(), reply -> {
@@ -2673,7 +2699,7 @@ public class MSRoute extends AbstractVerticle {
 			}).compose(objLst -> {
 				Promise<List<Object>> promise = Promise.promise();
 				
-				colId.put(COL_ID, "2011");
+				colId.put(COL_ID, DB_TYPE+"011");
 				
 				eb.request("vertx.selectQuery", colId.toString(), reply -> {
 					
@@ -2801,9 +2827,14 @@ public class MSRoute extends AbstractVerticle {
 			String compId = json.getString("comp_id");
 			String waypointNum = json.getString("waypoint_num");
 			String direction = json.getString("direction");
+			
+			if( "".equals(missionId) || missionId == null) {
+				logger.error("code : "+MSMessageReturn.ERR_MDT_PARAM_MISS_CODE+", message : "+MSMessageReturn.ERR_MDT_PARAM_MISS_MSG+"mission_id");
+				msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_MDT_PARAM_MISS_CODE, MSMessageReturn.ERR_MDT_PARAM_MISS_MSG+"mission_id", MSMessageReturn.STAT_ERROR);
+			}
 	
 			JSONObject colId = new JSONObject();					
-			colId.put(COL_ID, "2010");
+			colId.put(COL_ID, DB_TYPE+"010");
 			colId.put("mission_id", missionId);
 			colId.put("comp_id", compId);
 			
@@ -2861,7 +2892,7 @@ public class MSRoute extends AbstractVerticle {
 			fut2.compose(mission -> {
 				Promise<List<Object>> promise = Promise.promise();
 				
-				colId.put(COL_ID, "2012");
+				colId.put(COL_ID, DB_TYPE+"012");
 				
 				eb.request("vertx.selectQuery", colId.toString(), reply -> {
 					
@@ -2951,7 +2982,7 @@ public class MSRoute extends AbstractVerticle {
 			}).compose(objLst -> {
 				Promise<List<Object>> promise = Promise.promise();
 				
-				colId.put(COL_ID, "2013");
+				colId.put(COL_ID, DB_TYPE+"013");
 				colId.put("CMD_TYPE", "1");
 				
 				eb.request("vertx.selectQuery", colId.toString(), reply -> {
@@ -3080,7 +3111,7 @@ public class MSRoute extends AbstractVerticle {
 			}).compose(objLst -> {
 				Promise<List<Object>> promise = Promise.promise();
 				
-				colId.put(COL_ID, "2011");
+				colId.put(COL_ID, DB_TYPE+"011");
 				
 				eb.request("vertx.selectQuery", colId.toString(), reply -> {
 					
@@ -3204,7 +3235,7 @@ public class MSRoute extends AbstractVerticle {
 		try {
 	
 			JSONObject colId = new JSONObject();					
-			colId.put(COL_ID, "2014");
+			colId.put(COL_ID, DB_TYPE+"014");
 			
 			System.out.println("getServiceTypeList : "+colId.toString());
 			
@@ -3321,7 +3352,7 @@ public class MSRoute extends AbstractVerticle {
 			String svcType = json.getString("service_type");
 	
 			JSONObject colId = new JSONObject();					
-			colId.put(COL_ID, "2016");
+			colId.put(COL_ID, DB_TYPE+"016");
 			colId.put("service_type", svcType);
 			
 			System.out.println("getCommandByServiceType : "+colId.toString());
@@ -3413,7 +3444,7 @@ public class MSRoute extends AbstractVerticle {
 			fut2.compose(objLst -> {
 				Promise<List<Object>> promise = Promise.promise();
 				
-				colId.put(COL_ID, "2013");
+				colId.put(COL_ID, DB_TYPE+"013");
 				colId.put("CMD_TYPE", "0");
 				
 				eb.request("vertx.selectQuery", colId.toString(), reply -> {
@@ -3509,7 +3540,7 @@ public class MSRoute extends AbstractVerticle {
 				
 				Promise<List<Object>> promise = Promise.promise();
 				
-				colId.put(COL_ID, "2015");
+				colId.put(COL_ID, DB_TYPE+"015");
 				colId.put("service_type", svcType);
 				
 				eb.request("vertx.selectQuery", colId.toString(), reply -> {
@@ -3701,7 +3732,7 @@ public class MSRoute extends AbstractVerticle {
 			}
 		
 			logger.info("attempting to connect to vertx.queryManage verticle");
-			json.put(COL_ID, "2026");
+			json.put(COL_ID, DB_TYPE+"026");
 			json.put("compId", compId);
 			
 			//json.put("isXML", true);
@@ -3749,7 +3780,7 @@ public class MSRoute extends AbstractVerticle {
 			
 			fut1.compose(geofences -> {
 				
-				json.put(COL_ID, "2019");
+				json.put(COL_ID, DB_TYPE+"019");
 				
 				Promise<Void> promise = Promise.promise();
 				
@@ -3875,7 +3906,7 @@ public class MSRoute extends AbstractVerticle {
 			String compId = routingContext.pathParam("comp_id");
 	
 			JSONObject colId = new JSONObject();					
-			colId.put(COL_ID, "2027");
+			colId.put(COL_ID, DB_TYPE+"027");
 			colId.put("geo_id", geoId);
 			colId.put("comp_id", compId);
 			
@@ -3933,7 +3964,7 @@ public class MSRoute extends AbstractVerticle {
 			fut2.compose(geofence -> {
 				Promise<List<Object>> promise = Promise.promise();
 				
-				colId.put(COL_ID, "2020");
+				colId.put(COL_ID, DB_TYPE+"020");
 				
 				eb.request("vertx.selectQuery", colId.toString(), reply -> {
 					
@@ -4128,7 +4159,7 @@ public class MSRoute extends AbstractVerticle {
 					}
 					
 					JSONObject insQueryId = GEOFENCE.get(0);//new JSONObject();
-					insQueryId.put(COL_ID, "2025");
+					insQueryId.put(COL_ID, DB_TYPE+"025");
 					System.out.println("insertGeofence : "+insQueryId.toString());
 					
 					//Geofence Table Insert
@@ -4173,7 +4204,7 @@ public class MSRoute extends AbstractVerticle {
 					//Geopoint Table insert
 					for(int i=0; i<GEOPOINT.size(); i++) {
 						JSONObject insQueryId = GEOPOINT.get(i);//new JSONObject();
-						insQueryId.put(COL_ID, "2021");					
+						insQueryId.put(COL_ID, DB_TYPE+"021");					
 						
 						//System.out.println("insertCommandList : "+insQueryId.toString());
 						//Mission Table Insert
@@ -4199,7 +4230,7 @@ public class MSRoute extends AbstractVerticle {
 				}).onSuccess(geofenceId->{
 					
 					JSONObject colId = new JSONObject();					
-					colId.put(COL_ID, "2027");
+					colId.put(COL_ID, DB_TYPE+"027");
 					colId.put("geo_id", geofenceId);
 					colId.put("comp_id", comp_id);
 					
@@ -4257,7 +4288,7 @@ public class MSRoute extends AbstractVerticle {
 					fut2.compose(geofences -> {
 						Promise<List<Object>> promise = Promise.promise();
 						
-						colId.put(COL_ID, "2020");
+						colId.put(COL_ID, DB_TYPE+"020");
 						String geoId = (String) colId.get("geo_id");
 						
 						eb.request("vertx.selectQuery", colId.toString(), reply -> {
@@ -4410,6 +4441,11 @@ public class MSRoute extends AbstractVerticle {
 			String geo_id = json.getString("geo_id");
 			String comp_id = json.getString("comp_id");
 			
+			if( "".equals(geo_id) || geo_id == null) {
+				logger.error("code : "+MSMessageReturn.ERR_MDT_PARAM_MISS_CODE+", message : "+MSMessageReturn.ERR_MDT_PARAM_MISS_MSG+"geo_id");
+				msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_MDT_PARAM_MISS_CODE, MSMessageReturn.ERR_MDT_PARAM_MISS_MSG+"geo_id", MSMessageReturn.STAT_ERROR);
+			}
+			
 			boolean isValid = this.checkGEOParam(json.toString(), routingContext, cmdList);
 			
 			System.out.println("isValid : "+isValid);
@@ -4417,7 +4453,7 @@ public class MSRoute extends AbstractVerticle {
 			if(isValid) {
 								
 				JSONObject queryParam = new JSONObject();
-				queryParam.put(COL_ID, "2027");
+				queryParam.put(COL_ID, DB_TYPE+"027");
 				queryParam.put("geo_id", geo_id);
 				queryParam.put("comp_id", comp_id);
 				
@@ -4450,8 +4486,8 @@ public class MSRoute extends AbstractVerticle {
 							}
 							//쿼리 결과만 리턴 되고 그 결과가 정상(10002)이 아닐 때
 							else if( !"10002".equals(queryResCd) ) {
-								logger.error("code : "+MSMessageReturn.ERR_DELETE_CODE+", message : "+MSMessageReturn.ERR_DELETE_MSG);
-								msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_DELETE_CODE, MSMessageReturn.ERR_DELETE_MSG, MSMessageReturn.STAT_ERROR);
+								logger.error("code : "+MSMessageReturn.ERR_UPDATE_CODE+", message : "+MSMessageReturn.ERR_UPDATE_MSG);
+								msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_UPDATE_CODE, MSMessageReturn.ERR_UPDATE_MSG, MSMessageReturn.STAT_ERROR);
 								promise.fail(geo_id);
 							}
 							
@@ -4473,7 +4509,7 @@ public class MSRoute extends AbstractVerticle {
 					Promise<String> promise = Promise.promise();
 					
 					JSONObject queryParam2 = new JSONObject();
-					queryParam2.put(COL_ID, "2023");
+					queryParam2.put(COL_ID, DB_TYPE+"023");
 					queryParam2.put("geo_id", result);
 					
 					System.out.println("DeleteGeopoints param : "+queryParam2.toString());
@@ -4504,8 +4540,8 @@ public class MSRoute extends AbstractVerticle {
 									logger.info("DeleteGeopoints Success : "+result);								
 									promise.complete(geo_id);
 								}else {
-									logger.error("code : "+MSMessageReturn.ERR_DELETE_CODE+", message : "+MSMessageReturn.ERR_DELETE_MSG);
-									msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_DELETE_CODE, MSMessageReturn.ERR_DELETE_MSG, MSMessageReturn.STAT_ERROR);
+									logger.error("code : "+MSMessageReturn.ERR_UPDATE_CODE+", message : "+MSMessageReturn.ERR_UPDATE_MSG);
+									msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_UPDATE_CODE, MSMessageReturn.ERR_UPDATE_MSG, MSMessageReturn.STAT_ERROR);
 									promise.fail(geo_id);
 								}
 								
@@ -4519,8 +4555,8 @@ public class MSRoute extends AbstractVerticle {
 							
 						} else {
 			
-							logger.error("code : "+MSMessageReturn.ERR_DELETE_CODE+", message : "+MSMessageReturn.ERR_DELETE_MSG);
-							msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_DELETE_CODE, MSMessageReturn.ERR_DELETE_MSG, MSMessageReturn.STAT_ERROR);
+							logger.error("code : "+MSMessageReturn.ERR_UPDATE_CODE+", message : "+MSMessageReturn.ERR_UPDATE_MSG);
+							msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_UPDATE_CODE, MSMessageReturn.ERR_UPDATE_MSG, MSMessageReturn.STAT_ERROR);
 							promise.fail(result);
 						}
 					});				
@@ -4531,7 +4567,7 @@ public class MSRoute extends AbstractVerticle {
 					Promise<String> promise = Promise.promise();
 					
 					JSONObject queryParam2 = new JSONObject();
-					queryParam2.put(COL_ID, "2022");
+					queryParam2.put(COL_ID, DB_TYPE+"022");
 					queryParam2.put("geo_id", result);
 					
 					System.out.println("DeleteGeofence param : "+queryParam2.toString());
@@ -4562,8 +4598,8 @@ public class MSRoute extends AbstractVerticle {
 									logger.info("DeleteGeofence Success : "+result);								
 									promise.complete(geo_id);
 								}else {
-									logger.error("code : "+MSMessageReturn.ERR_DELETE_CODE+", message : "+MSMessageReturn.ERR_DELETE_MSG);
-									msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_DELETE_CODE, MSMessageReturn.ERR_DELETE_MSG, MSMessageReturn.STAT_ERROR);
+									logger.error("code : "+MSMessageReturn.ERR_UPDATE_CODE+", message : "+MSMessageReturn.ERR_UPDATE_MSG);
+									msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_UPDATE_CODE, MSMessageReturn.ERR_UPDATE_MSG, MSMessageReturn.STAT_ERROR);
 									promise.fail(geo_id);
 								}
 								
@@ -4577,8 +4613,8 @@ public class MSRoute extends AbstractVerticle {
 							
 						} else {
 			
-							logger.error("code : "+MSMessageReturn.ERR_DELETE_CODE+", message : "+MSMessageReturn.ERR_DELETE_MSG);
-							msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_DELETE_CODE, MSMessageReturn.ERR_DELETE_MSG, MSMessageReturn.STAT_ERROR) ;
+							logger.error("code : "+MSMessageReturn.ERR_UPDATE_CODE+", message : "+MSMessageReturn.ERR_UPDATE_MSG);
+							msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_UPDATE_CODE, MSMessageReturn.ERR_UPDATE_MSG, MSMessageReturn.STAT_ERROR) ;
 							promise.fail(result);
 						}
 					});				
@@ -4618,7 +4654,7 @@ public class MSRoute extends AbstractVerticle {
 					}
 					
 					JSONObject insQueryId = GEOFENCE.get(0);//new JSONObject();
-					insQueryId.put(COL_ID, "2025");
+					insQueryId.put(COL_ID, DB_TYPE+"025");
 					System.out.println("insertGeofence : "+insQueryId.toString());
 					
 					//Geofence Table Insert
@@ -4663,7 +4699,7 @@ public class MSRoute extends AbstractVerticle {
 					//Geopoint Table insert
 					for(int i=0; i<GEOPOINT.size(); i++) {
 						JSONObject insQueryId = GEOPOINT.get(i);//new JSONObject();
-						insQueryId.put(COL_ID, "2021");					
+						insQueryId.put(COL_ID, DB_TYPE+"021");					
 						
 						//System.out.println("insertCommandList : "+insQueryId.toString());
 						//Mission Table Insert
@@ -4689,7 +4725,7 @@ public class MSRoute extends AbstractVerticle {
 				}).onSuccess(geofenceId->{
 					
 					JSONObject colId = new JSONObject();					
-					colId.put(COL_ID, "2027");
+					colId.put(COL_ID, DB_TYPE+"027");
 					colId.put("geo_id", geofenceId);
 					colId.put("comp_id", comp_id);
 					
@@ -4747,7 +4783,7 @@ public class MSRoute extends AbstractVerticle {
 					fut2.compose(geofences -> {
 						Promise<List<Object>> promise = Promise.promise();
 						
-						colId.put(COL_ID, "2020");
+						colId.put(COL_ID, DB_TYPE+"020");
 						String geoId = (String) colId.get("geo_id");
 						
 						eb.request("vertx.selectQuery", colId.toString(), reply -> {
@@ -4852,8 +4888,8 @@ public class MSRoute extends AbstractVerticle {
 						.end(gson.toJson(result).replace("\\", ""));
 						
 					}).onFailure(objList->{
-						logger.info("code : "+MSMessageReturn.ERR_CREATE_CODE+", message : "+MSMessageReturn.ERR_CREATE_MSG);
-						msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_CREATE_CODE, MSMessageReturn.ERR_CREATE_MSG, MSMessageReturn.STAT_ERROR);
+						logger.info("code : "+MSMessageReturn.ERR_UPDATE_CODE+", message : "+MSMessageReturn.ERR_UPDATE_MSG);
+						msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_UPDATE_CODE, MSMessageReturn.ERR_UPDATE_MSG, MSMessageReturn.STAT_ERROR);
 					});
 					
 				});
@@ -4903,7 +4939,7 @@ public class MSRoute extends AbstractVerticle {
 			System.out.println("deleteGeofence param : "+json.toString());
 				
 			JSONObject queryParam = new JSONObject();
-			queryParam.put(COL_ID, "2027");
+			queryParam.put(COL_ID, DB_TYPE+"027");
 			queryParam.put("geo_id", geo_id);
 			queryParam.put("comp_id", comp_id);
 			
@@ -4959,7 +4995,7 @@ public class MSRoute extends AbstractVerticle {
 				Promise<String> promise = Promise.promise();
 				
 				JSONObject queryParam2 = new JSONObject();
-				queryParam2.put(COL_ID, "2023");
+				queryParam2.put(COL_ID, DB_TYPE+"023");
 				queryParam2.put("geo_id", result);
 				
 				System.out.println("DeleteGeopoints param : "+queryParam2.toString());
@@ -5017,7 +5053,7 @@ public class MSRoute extends AbstractVerticle {
 				Promise<String> promise = Promise.promise();
 				
 				JSONObject queryParam2 = new JSONObject();
-				queryParam2.put(COL_ID, "2022");
+				queryParam2.put(COL_ID, DB_TYPE+"022");
 				queryParam2.put("geo_id", result);
 				
 				System.out.println("DeleteGeofence param : "+queryParam2.toString());
@@ -5113,7 +5149,7 @@ public class MSRoute extends AbstractVerticle {
 			String compId = routingContext.pathParam("company_id");
 	
 			JSONObject colId = new JSONObject();					
-			colId.put(COL_ID, "2027");
+			colId.put(COL_ID, DB_TYPE+"027");
 			colId.put("geo_id", geoId);
 			colId.put("comp_id", compId);
 			
@@ -5171,7 +5207,7 @@ public class MSRoute extends AbstractVerticle {
 			fut2.compose(geofence -> {
 				Promise<List<Object>> promise = Promise.promise();
 				
-				colId.put(COL_ID, "2020");
+				colId.put(COL_ID, DB_TYPE+"020");
 				
 				eb.request("vertx.selectQuery", colId.toString(), reply -> {
 					
@@ -5543,7 +5579,7 @@ public class MSRoute extends AbstractVerticle {
 						return false;
 					}
 					
-				}else if("roundtrip".equals(key) || "is_grid".equals(key) ) {
+				}else if("roundtrip".equals(key)) {
 					
 					if(!(obj instanceof String)){
 						logger.error(key+" parameter type error");
@@ -5556,6 +5592,21 @@ public class MSRoute extends AbstractVerticle {
 						msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_JSON_PARSE_CODE, MSMessageReturn.ERR_JSON_PARSE_MSG, MSMessageReturn.STAT_ERROR);
 						return false;
 					}
+					
+				}else if("is_grid".equals(key) ) {
+					
+					if(!(obj instanceof String)){
+						logger.error(key+" parameter type error");
+						msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_JSON_PARSE_CODE, MSMessageReturn.ERR_JSON_PARSE_MSG, MSMessageReturn.STAT_ERROR);
+						return false;
+					}
+					
+					if( !( "true".equals( jsonStr ) || "false".equals( jsonStr ) ) ) {
+						logger.error("RoundTrip value is true or false string RoundTrip value: "+jsonStr);
+						msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_JSON_PARSE_CODE, MSMessageReturn.ERR_JSON_PARSE_MSG, MSMessageReturn.STAT_ERROR);
+						return false;
+					}
+					
 					
 				}else if("count".equals(key) ) {
 					
@@ -5663,7 +5714,7 @@ public class MSRoute extends AbstractVerticle {
 		String mission_id = "M"+uuid.substring(10,23);
 		
 		JSONObject queryId = new JSONObject();
-		queryId.put(COL_ID, "2003");
+		queryId.put(COL_ID, DB_TYPE+"003");
 		queryId.put("mission_id", mission_id);
 		
 		eb.request("vertx.selectQuery", queryId.toString(), reply -> {
@@ -5713,7 +5764,7 @@ public class MSRoute extends AbstractVerticle {
 		String geo_id = "G"+uuid.substring(10,23);
 		
 		JSONObject queryId = new JSONObject();
-		queryId.put(COL_ID, "2020");
+		queryId.put(COL_ID, DB_TYPE+"020");
 		queryId.put("geo_id", geo_id);
 		
 		eb.request("vertx.selectQuery", queryId.toString(), reply -> {
@@ -5843,7 +5894,7 @@ public class MSRoute extends AbstractVerticle {
 			fut1.compose(ar ->{
 				Promise<Void> promise = Promise.promise();
 				JSONObject insQueryId = new JSONObject();
-				insQueryId.put(COL_ID, "2004");
+				insQueryId.put(COL_ID, DB_TYPE+"004");
 				System.out.println("insQueryId : "+insQueryId.toString());
 				
 				//Mission Table Insert
