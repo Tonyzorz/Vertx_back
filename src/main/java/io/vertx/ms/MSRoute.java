@@ -783,8 +783,8 @@ public class MSRoute extends AbstractVerticle {
 					});
 					
 				}).onFailure(missionId->{
-					logger.info("code : "+MSMessageReturn.ERR_CREATE_CODE+", message : "+MSMessageReturn.ERR_CREATE_MSG);
-					msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_CREATE_CODE, MSMessageReturn.ERR_CREATE_MSG, MSMessageReturn.STAT_ERROR);
+					logger.info("code : "+MSMessageReturn.ERR_WRONG_PARAM_CODE+", message : "+MSMessageReturn.ERR_WRONG_PARAM_MSG);
+					msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_WRONG_PARAM_CODE, MSMessageReturn.ERR_WRONG_PARAM_MSG, MSMessageReturn.STAT_ERROR);
 				});
 				
 				//System.out.println("result : "+result.toString());
@@ -1831,7 +1831,7 @@ public class MSRoute extends AbstractVerticle {
 				
 			}
 			
-		// 정보를 입력하지 않았을 시 
+		// 정보를 입력하지 않았을 시
 		} catch(NullPointerException e) {
 			
 			logger.error("NullPointerException occurred");
@@ -4808,8 +4808,8 @@ public class MSRoute extends AbstractVerticle {
 									
 									//쿼리 오류 발생 시
 									if( !"".equals(code) &&  !"10002".equals(code)) {
-										logger.info("code : "+MSMessageReturn.ERR_RETRIEVE_DATA_CODE+", message : "+MSMessageReturn.ERR_RETRIEVE_DATA_MSG);
-										msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_RETRIEVE_DATA_CODE, MSMessageReturn.ERR_RETRIEVE_DATA_MSG, MSMessageReturn.STAT_ERROR);
+										logger.info("code : "+MSMessageReturn.ERR_UPDATE_CODE+", message : "+MSMessageReturn.ERR_UPDATE_MSG);
+										msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_UPDATE_CODE, MSMessageReturn.ERR_UPDATE_MSG, MSMessageReturn.STAT_ERROR);
 									}else if( !"".equals(code) && "10001".equals(code)){									
 										logger.info("code : "+MSMessageReturn.ERR_RETRIEVE_DATA_CODE+", message : "+MSMessageReturn.ERR_RETRIEVE_DATA_MSG);
 										msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_RETRIEVE_DATA_CODE, MSMessageReturn.ERR_RETRIEVE_DATA_MSG+"Not found getGeoPoints : "+geoId, MSMessageReturn.STAT_ERROR);
@@ -5574,8 +5574,8 @@ public class MSRoute extends AbstractVerticle {
 					String repeat = obj.toString();
 					
 					if(!repeat.matches("[-+]?\\d*")){
-						logger.error(key+" parameter type error");
-						msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_JSON_PARSE_CODE, MSMessageReturn.ERR_JSON_PARSE_MSG, MSMessageReturn.STAT_ERROR);
+						logger.error(key+" wrong param error");
+						msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_WRONG_PARAM_CODE, MSMessageReturn.ERR_WRONG_PARAM_MSG, MSMessageReturn.STAT_ERROR);
 						return false;
 					}
 					
@@ -5589,7 +5589,7 @@ public class MSRoute extends AbstractVerticle {
 					
 					if( !( "true".equals( jsonStr ) || "false".equals( jsonStr ) ) ) {
 						logger.error("RoundTrip value is true or false string RoundTrip value: "+jsonStr);
-						msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_JSON_PARSE_CODE, MSMessageReturn.ERR_JSON_PARSE_MSG, MSMessageReturn.STAT_ERROR);
+						msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_WRONG_PARAM_CODE, MSMessageReturn.ERR_WRONG_PARAM_MSG, MSMessageReturn.STAT_ERROR);
 						return false;
 					}
 					
@@ -5603,7 +5603,7 @@ public class MSRoute extends AbstractVerticle {
 					
 					if( !( "true".equals( jsonStr ) || "false".equals( jsonStr ) ) ) {
 						logger.error("RoundTrip value is true or false string RoundTrip value: "+jsonStr);
-						msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_JSON_PARSE_CODE, MSMessageReturn.ERR_JSON_PARSE_MSG, MSMessageReturn.STAT_ERROR);
+						msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_WRONG_PARAM_CODE, MSMessageReturn.ERR_WRONG_PARAM_MSG, MSMessageReturn.STAT_ERROR);
 						return false;
 					}
 					
@@ -5620,7 +5620,7 @@ public class MSRoute extends AbstractVerticle {
 					
 					if(!repeat.matches("[-+]?\\d*")){
 						logger.error(key+" parameter type error");
-						msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_JSON_PARSE_CODE, MSMessageReturn.ERR_JSON_PARSE_MSG, MSMessageReturn.STAT_ERROR);
+						msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_CREATE_CODE, MSMessageReturn.ERR_CREATE_MSG, MSMessageReturn.STAT_ERROR);
 						return false;
 					}
 					
@@ -5667,7 +5667,7 @@ public class MSRoute extends AbstractVerticle {
 				if("commands".equals(key)) {				
 					if(!(obj instanceof JSONArray)){	
 						logger.error(key+" parameter type error");
-						msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_INTERNAL_ERROR_CODE, MSMessageReturn.ERR_INTERNAL_ERROR_MSG+MSMessageReturn.ERR_WRONG_PARAM_CODE, MSMessageReturn.STAT_ERROR);
+						msMessageReturn.commonReturn(routingContext, MSMessageReturn.ERR_JSON_PARSE_CODE, MSMessageReturn.ERR_JSON_PARSE_MSG+MSMessageReturn.ERR_JSON_PARSE_CODE, MSMessageReturn.STAT_ERROR);
 						return false;
 					}
 					
