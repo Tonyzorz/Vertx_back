@@ -3809,40 +3809,49 @@ public class MSRoute extends AbstractVerticle {
 								
 								JSONObject geofence = (JSONObject) geofences.get(i);
 								
-								for (int j = 0; j < geopoints.size(); j++) {
+								//조회 결과가 없으면
+								if(geofence.get("code") != null && "10001".equals(geofence.get("code").toString())) {
 									
-									JSONObject attr = (JSONObject) geopoints.get(j);
+									result.put("count", "0");
+									result.put("geofences", list);									
 									
-									if(geofence.get("GEO_ID").equals(attr.get("GEO_ID"))) {										
-										geofence.put("lat0",attr.get("GEO_LAT"));
-										geofence.put("lon0",attr.get("GEO_LON"));
+								}else {
+									for (int j = 0; j < geopoints.size(); j++) {
+										
+										JSONObject attr = (JSONObject) geopoints.get(j);
+										
+										if(geofence.get("GEO_ID").equals(attr.get("GEO_ID"))) {										
+											geofence.put("lat0",attr.get("GEO_LAT"));
+											geofence.put("lon0",attr.get("GEO_LON"));
+										}
+										
 									}
 									
+									Map<String, Object> rstl = new LinkedHashMap<>();
+									
+									rstl.put("comp_id", geofence.get("COMP_ID"));
+									rstl.put("geo_id", geofence.get("GEO_ID"));								
+									rstl.put("geo_name", geofence.get("GEO_NAME"));								
+									rstl.put("user_id", geofence.get("USER_ID"));
+									rstl.put("geo_type", geofence.get("GEO_TYPE"));
+									rstl.put("geo_action", geofence.get("GEO_ACTION"));
+									rstl.put("max_alt", geofence.get("MAX_ALT"));								
+									rstl.put("created_at",geofence.get("CREATEDAT"));
+									rstl.put("lat0", geofence.get("lat0"));
+									rstl.put("lon0", geofence.get("lon0"));
+									
+									
+									list.add(rstl);
+									
+									//System.out.println("missons3 : "+list.toString());
+									
+									result.put("count", geofences.size()+"");
+									result.put("geofences", list);
 								}
-								
-								Map<String, Object> rstl = new LinkedHashMap<>();
-								
-								rstl.put("comp_id", geofence.get("COMP_ID"));
-								rstl.put("geo_id", geofence.get("GEO_ID"));								
-								rstl.put("geo_name", geofence.get("GEO_NAME"));								
-								rstl.put("user_id", geofence.get("USER_ID"));
-								rstl.put("geo_type", geofence.get("GEO_TYPE"));
-								rstl.put("geo_action", geofence.get("GEO_ACTION"));
-								rstl.put("max_alt", geofence.get("MAX_ALT"));								
-								rstl.put("created_at",geofence.get("CREATEDAT"));
-								rstl.put("lat0", geofence.get("lat0"));
-								rstl.put("lon0", geofence.get("lon0"));
-								
-								
-								list.add(rstl);
 								
 							}
 							
-							System.out.println("missons3 : "+list.toString());
 							
-							
-							result.put("count", geofences.size()+"");
-							result.put("geofences", list);
 
 							routingContext.response().putHeader("content-type", "application/json; charset=utf-8")
 							.end(result.toString());
